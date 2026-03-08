@@ -129,10 +129,11 @@ async def check_graid_completions(channel_id: int):
         completions = get_player_guild_raids(player, guild_members)
         total_completions = 0
         for raid in completions:
+            if not raid == 'total':
             #print(f'{player}: {raid}:\n    prev: {prev_completions[raid]}\n    present: {amount}\n    delta: {prev_completions[raid] - amount}')
-            if completions[raid] - prev_completions[raid] != 0:
-                new_completions[raid][player] = completions[raid] - prev_completions[raid]
-                total_completions += completions[raid] - prev_completions[raid]
+                if completions[raid] - prev_completions[raid] != 0:
+                    new_completions[raid][player] = completions[raid] - prev_completions[raid]
+                    total_completions += completions[raid] - prev_completions[raid]
         if total_completions < 0 or total_completions > 10: #arbitrary number I hope would be high enough to not catch any false positives
             ''.join((error_messages, f'{player} completed a suspiciously high amount of guild raids ({total_completions}) the past {WYNN_GUILD_API_QUERY_INTERVAL} minutes\n'))
     
