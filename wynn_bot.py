@@ -1,12 +1,11 @@
 import discord
 from discord import app_commands
 
-import json
 import requests
 import os
 from PIL import Image, ImageDraw, ImageFont
 import math
-import datetime
+import database
 
 from dotenv import load_dotenv
 
@@ -75,8 +74,12 @@ class Info(discord.Client):
         await self.tree.sync()
 
 
+
+
 load_dotenv()
 BOT_TOKEN: str = os.getenv("BOT_TOKEN") #type: ignore
+
+db = database.Database()
 
 
 client = Info()
@@ -90,13 +93,18 @@ async def looping_calculations(guild_prefix, channel_id: int):
     if not guild_loop_started:
         prev_guild_data = {}
         prev_guild_members = {}
-        guild_loop_started = True
 
     else:
         prev_guild_data = guild_data
         prev_guild_members = guild_members
     guild_data = get_wynn_data(guild_prefix)
     guild_members = get_member_stats(guild_data)
+    if not guild_loop_started:
+        for player, data in guild_members.items():
+            db.update_member_contribution(uuid=data['uuid'], username=player, new_contribution=data['contributed'])
+            for raid, amount in get_player_guild_raids(player, guild_members).items():
+                db.update_raid_stat(uuid=data['uuid'], raid_name=raid, completions=amount)
+        guild_loop_started = True
 
     await check_completions((guild_members, prev_guild_members), channel_id)
     await xp_contributions(guild_members, prev_guild_members, WYNN_GUILD_QUERY_INTERVAL, channel_id)
@@ -133,13 +141,13 @@ async def check_completions(data: tuple, channel_id: int):
                 total_completions += completions[raid] - prev_completions[raid]
         if total_completions < 0 or total_completions > 10: #arbitrary number I hope would be high enough to not catch any false positives
             ''.join((error_messages, f'{player} completed a suspiciously high amount of guild raids ({total_completions}) the past {WYNN_GUILD_QUERY_INTERVAL} minutes\n'))
+    
     for raid, raid_data in new_completions.items():
         completion_sum = 0
         for player, amount in raid_data.items():
             completion_sum += amount
         if not completion_sum % 4 == 0:
             ''.join((error_messages, f'An error occured in the completions of {raid}\nplease send a bug report\n'))
-
 
     
     embed = discord.Embed(title='guild raid completions', description='completed guild raids last minutes', color=discord.Color.green())
@@ -151,17 +159,10 @@ async def check_completions(data: tuple, channel_id: int):
         if not raid_completions_string == '':
             embed.add_field(name=raid, value=raid_completions_string, inline=False)
     
-    """ time = datetime.datetime.now()
-    if not time.minute == 59:
-        next_update_dc_timestamp = int(datetime.datetime.now().replace(minute=time.minute+1).timestamp())
-    else:
-        next_update_dc_timestamp = int(datetime.datetime.now().timestamp()) """
-    
     channel: discord.TextChannel = client.get_channel(channel_id) # type: ignore
     if not len(embed.fields) == 0:
         await channel.send(
             content=error_messages,
-            #content=f"next update at <t:{next_update_dc_timestamp}:T> (<t:{next_update_dc_timestamp}:R>) This might be inaccurate as I can't be bothered to handle edge cases",
             embed=embed)
 
 
@@ -174,9 +175,12 @@ async def xp_contributions(guild_members, prev_guild_members, timespan, channel_
         if contributed_delta == 0:
             continue
         contributed_deltas[player] = contributed_delta
+        db.update_member_contribution(uuid=data['uuid'], username=player, new_contribution=guild_members[player]['contributed'])
+
     contributed_return_string = ''
     for player, amount in contributed_deltas.items():
         contributed_return_string = ''.join((contributed_return_string, f'{player}: {amount}\n'))
+
     if not len(contributed_return_string) == 0:
         embed = discord.Embed(title=f'Xp contributed in the last {timespan} minutes per player')
         embed.add_field(name='list', value=contributed_return_string[:1024])
@@ -197,6 +201,7 @@ async def start_looping_calculations(interaction: discord.Interaction):
     target_channel_id = interaction.channel_id
     if target_channel_id == None:
         return
+
 
     await interaction.followup.send('*started tracking*')
     await looping_calculations.start(guild_prefix, target_channel_id)
