@@ -3,9 +3,9 @@ from discord import app_commands
 
 import requests
 import os
-from PIL import Image, ImageDraw, ImageFont
-import math
+
 import database
+import markdown_card
 
 from dotenv import load_dotenv
 
@@ -14,7 +14,10 @@ FONT_PATH = "OpenSans-Regular.ttf"
 
 from discord.ext import tasks
 
-WYNN_GUILD_QUERY_INTERVAL = 2 #minutes
+WYNN_GUILD_API_QUERY_INTERVAL = 2 #minutes
+WYNN_XP_RETURN_INTERVAL = 60 #minutes
+
+
 guild_loop_started = False
 
 guild_members: dict
@@ -86,9 +89,8 @@ client = Info()
 
 
 
-
-@tasks.loop(minutes=WYNN_GUILD_QUERY_INTERVAL)
-async def looping_calculations(guild_prefix, channel_id: int):
+@tasks.loop(minutes=WYNN_GUILD_API_QUERY_INTERVAL)
+async def guild_api_query(guild_prefix):
     global prev_guild_data, prev_guild_members, guild_data, guild_members, guild_loop_started
     if not guild_loop_started:
         prev_guild_data = {}
@@ -103,25 +105,17 @@ async def looping_calculations(guild_prefix, channel_id: int):
         for player, data in guild_members.items():
             db.update_member_contribution(uuid=data['uuid'], username=player, new_contribution=data['contributed'])
             for raid, amount in get_player_guild_raids(player, guild_members).items():
-                db.update_raid_stat(uuid=data['uuid'], raid_name=raid, completions=amount)
+                if not raid == 'total':
+                    db.update_raid_stat(uuid=data['uuid'], raid_name=raid, completions=amount)
         guild_loop_started = True
 
-    await check_completions((guild_members, prev_guild_members), channel_id)
-    await xp_contributions(guild_members, prev_guild_members, WYNN_GUILD_QUERY_INTERVAL, channel_id)
 
 
 
 
 
-
-
-
-
-
-
-async def check_completions(data: tuple, channel_id: int):
-    guild_members, prev_guild_members = data
-
+@tasks.loop(minutes=WYNN_GUILD_API_QUERY_INTERVAL)
+async def check_graid_completions(channel_id: int):
     error_messages: str = ''
 
     new_completions: dict[str, dict[str, int]] = {
@@ -140,7 +134,7 @@ async def check_completions(data: tuple, channel_id: int):
                 new_completions[raid][player] = completions[raid] - prev_completions[raid]
                 total_completions += completions[raid] - prev_completions[raid]
         if total_completions < 0 or total_completions > 10: #arbitrary number I hope would be high enough to not catch any false positives
-            ''.join((error_messages, f'{player} completed a suspiciously high amount of guild raids ({total_completions}) the past {WYNN_GUILD_QUERY_INTERVAL} minutes\n'))
+            ''.join((error_messages, f'{player} completed a suspiciously high amount of guild raids ({total_completions}) the past {WYNN_GUILD_API_QUERY_INTERVAL} minutes\n'))
     
     for raid, raid_data in new_completions.items():
         completion_sum = 0
@@ -168,7 +162,12 @@ async def check_completions(data: tuple, channel_id: int):
 
 
 
-async def xp_contributions(guild_members, prev_guild_members, timespan, channel_id):
+
+
+
+
+@tasks.loop(minutes=WYNN_XP_RETURN_INTERVAL)
+async def xp_contributions(timespan, channel_id):
     contributed_deltas = {}
     for player, data in prev_guild_members.items():
         contributed_delta = guild_members[player]['contributed'] - data['contributed']
@@ -189,13 +188,8 @@ async def xp_contributions(guild_members, prev_guild_members, timespan, channel_
 
 
 
-
-
-
-
-
-@client.tree.command(name="start_looping_calculations", description="starts tracking guild raid completions")
-async def start_looping_calculations(interaction: discord.Interaction):
+@client.tree.command(name='track_api_changes')
+async def api_looping(interaction: discord.Interaction):
     await interaction.response.defer()
     guild_prefix = 'TGAS'
     target_channel_id = interaction.channel_id
@@ -204,9 +198,33 @@ async def start_looping_calculations(interaction: discord.Interaction):
 
 
     await interaction.followup.send('*started tracking*')
-    await looping_calculations.start(guild_prefix, target_channel_id)
+    await guild_api_query.start(guild_prefix)
 
 
+
+@client.tree.command(name="start_tracking_guild_raids", description="starts tracking guild raid completions")
+async def track_guild_raids(interaction: discord.Interaction):
+    await interaction.response.defer()
+    guild_prefix = 'TGAS'
+    target_channel_id = interaction.channel_id
+    if target_channel_id == None:
+        return
+
+
+    await interaction.followup.send('*started tracking*')
+    await check_graid_completions.start(target_channel_id)
+
+@client.tree.command(name="start_tracking_xp", description="starts tracking xp contributions")
+async def track_xp_contributions(interaction: discord.Interaction):
+    await interaction.response.defer()
+    guild_prefix = 'TGAS'
+    target_channel_id = interaction.channel_id
+    if target_channel_id == None:
+        return
+
+
+    await interaction.followup.send('*started tracking*')
+    await xp_contributions.start(WYNN_XP_RETURN_INTERVAL, target_channel_id)
 
 
 
@@ -221,106 +239,11 @@ async def raids(interaction: discord.Interaction):
     for player, stats in raid_data.items():
         text_template = f"# {player}\n\nTotal: {stats['total']}\n- NOTG: {stats['Nest of the Grootslangs']}\n- NOL: {stats["Orphion's Nexus of Light"]}\n- TCC: {stats['The Canyon Colossus']}\n- TNA: {stats['The Nameless Anomaly']}\n==\n\\"
         complete_text += text_template
-    render_markdown_card(complete_text, 'data.png')
+    markdown_card.render_markdown_card(complete_text, 'data.png')
     with open('data.png', "rb") as f:
         data = discord.File(f)
     await interaction.followup.send(file=data)
 
-
-def download_font():
-    if not os.path.exists(FONT_PATH):
-        print("Downloading font...")
-        resp = requests.get(FONT_URL)
-        resp.raise_for_status()
-        with open(FONT_PATH, "wb") as f:
-            f.write(resp.content)
-        print("Font downloaded:", FONT_PATH)
-    else:
-        print("Font already exists:", FONT_PATH)
-
-download_font()
-
-# --- Step 2: The renderer with markdown and card layout ---
-
-def render_markdown_card(
-    text: str,
-    output_path: str,
-    width=500,
-    padding=40,
-    collumns=8,
-    bg_color=(35, 35, 35, 255),
-    card_color=(255, 255, 255, 255),
-    border_color=(200, 200, 200, 255),
-):
-
-    # Load the downloaded font
-    font_normal = ImageFont.truetype(FONT_PATH, 28)
-    font_bold   = ImageFont.truetype(FONT_PATH, 32)
-    font_code   = ImageFont.truetype(FONT_PATH, 26)
-    font_h1     = ImageFont.truetype(FONT_PATH, 44)
-    font_h2     = ImageFont.truetype(FONT_PATH, 36)
-
-    # Sample icons (make sure these exist in your project)
-    """ icons = {
-        "info": Image.open("icons/info.png").convert("RGBA"),
-        "warning": Image.open("icons/warning.png").convert("RGBA"),
-    } """
-
-    img = Image.new("RGBA", (width*collumns + 2 * padding, 10000), bg_color)
-    draw = ImageDraw.Draw(img)
-    y = padding
-    x = padding
-    max_y = y
-    player_list: list = text.split('\\')
-
-    for i, player in enumerate(player_list):
-        if i % math.ceil(len(player_list)/collumns) == 0 and i != 0:
-            max_y = y
-            y = padding
-            x += width
-        for raw_line in player.split("\n"):
-            line = raw_line.strip()
-            if not line:
-                y += 36
-                continue
-
-            # Headings
-            if line.startswith("# "):
-                draw.text((x + padding, y), line[2:], font=font_h1, fill="white")
-                y += 60
-                continue
-            if line.startswith("## "):
-                draw.text((x + padding, y), line[3:], font=font_h2, fill="white")
-                y += 52
-                continue
-
-            if line.startswith("=="):
-                y += 20
-                draw.rectangle((x + padding, y - 4, x + width - padding, y + 2), fill=(230, 230, 230, 255))
-                y += 50
-                continue
-
-            # List item
-            if line.startswith("- "):
-                draw.rectangle(
-                    (x, y - 4, x + width - padding, y + 38),
-                    #fill=(230, 230, 230, 255),
-                )
-                draw.text((x + padding + 20, y), line[2:], font=font_normal, fill="white")
-                y += 46
-                continue
-
-            # Inline formatting
-
-                # Default
-            draw.text((x, y), line, font=font_normal, fill="white")
-
-            y += 42
-
-    
-    total_width = collumns * width
-
-    img.crop((0, 0, total_width + padding, max_y + padding)).save(output_path)
 
 
 
