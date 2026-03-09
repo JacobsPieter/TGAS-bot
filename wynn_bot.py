@@ -196,6 +196,7 @@ async def xp_contributions(timespan, channel_id):
             db.update_member_contribution(uuid=data['uuid'], username=player, new_contribution=guild_members[player]['contributed'])
 
         except:
+            print('an exception occured')
             db.update_member_contribution(uuid=data['uuid'], username=player, new_contribution=guild_members[player]['contributed'])
 
     contributed_return_string = ''
