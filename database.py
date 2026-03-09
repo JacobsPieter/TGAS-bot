@@ -86,6 +86,23 @@ class Database:
 
         self.conn.commit()
 
+    def get_latest_contribution(self, uuid):
+
+        self.cursor.execute("""
+        SELECT contribution
+        FROM contribution_history
+        WHERE uuid = ?
+        ORDER BY timestamp DESC
+        LIMIT 1
+        """, (uuid,))
+
+        row = self.cursor.fetchone()
+
+        if row:
+            return row["contribution"]
+
+        return None
+
 
 
     def update_raid_stat(self, uuid, raid_name, completions):
@@ -110,3 +127,22 @@ class Database:
             """, (uuid, raid_name, completions, now))
 
             self.conn.commit()
+
+    
+
+
+    def get_latest_raid_completions(self, uuid, raid_name):
+        self.cursor.execute("""
+        SELECT completions
+        FROM raid_history
+        WHERE uuid = ? AND raid_name = ?
+        ORDER BY timestamp DESC
+        LIMIT 1
+        """, (uuid, raid_name))
+
+        row = self.cursor.fetchone()
+
+        if row:
+            return row["completions"]
+
+        return None

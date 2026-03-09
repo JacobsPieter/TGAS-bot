@@ -64,6 +64,21 @@ def get_guild_raids_per_player(member_stats) -> dict[str, dict[str, int]]:
     return guild_raids_per_player
 
 
+def get_latest_graid_completions(uuid) -> dict[str, int]:
+    raids = ['Nest of the Grootslangs', "Orphion's Nexus of Light", 'The Canyon Colossus', 'The Nameless Anomaly']
+    completions: dict = {'Nest of the Grootslangs': 0,
+                        "Orphion's Nexus of Light": 0,
+                        'The Canyon Colossus': 0,
+                        'The Nameless Anomaly': 0}
+    for raid in raids:
+        completions[raid] = db.get_latest_raid_completions(uuid=uuid, raid_name=raid)
+    return completions
+
+
+
+
+
+
 
 
 
@@ -101,6 +116,8 @@ async def guild_api_query(guild_prefix):
         prev_guild_members = guild_members
     guild_data = get_wynn_data(guild_prefix)
     guild_members = get_member_stats(guild_data)
+    
+    #only runs the first time to generate a database
     if not guild_loop_started:
         for player, data in guild_members.items():
             db.update_member_contribution(uuid=data['uuid'], username=player, new_contribution=data['contributed'])
@@ -124,19 +141,19 @@ async def check_graid_completions(channel_id: int):
         'The Canyon Colossus': {},
         'The Nameless Anomaly': {}
     }
-    for player in prev_guild_members:
-        prev_completions = get_player_guild_raids(player, prev_guild_members)
+    for player, data in prev_guild_members.items():
+        prev_completions = get_latest_graid_completions(data['uuid'])
         completions = get_player_guild_raids(player, guild_members)
         total_completions = 0
         for raid in completions:
             if not raid == 'total':
-            #print(f'{player}: {raid}:\n    prev: {prev_completions[raid]}\n    present: {amount}\n    delta: {prev_completions[raid] - amount}')
-                if completions[raid] - prev_completions[raid] != 0:
+                if completions[raid] > prev_completions[raid]:
                     new_completions[raid][player] = completions[raid] - prev_completions[raid]
-                    total_completions += completions[raid] - prev_completions[raid]
+                    db.update_raid_stat(data['uuid'], raid, new_completions[raid][player])
+                    """total_completions += completions[raid] - prev_completions[raid]
         if total_completions < 0 or total_completions > 10: #arbitrary number I hope would be high enough to not catch any false positives
             ''.join((error_messages, f'{player} completed a suspiciously high amount of guild raids ({total_completions}) the past {WYNN_GUILD_API_QUERY_INTERVAL} minutes\n'))
-    
+    """
     for raid, raid_data in new_completions.items():
         completion_sum = 0
         for player, amount in raid_data.items():
@@ -170,12 +187,16 @@ async def check_graid_completions(channel_id: int):
 @tasks.loop(minutes=WYNN_XP_RETURN_INTERVAL)
 async def xp_contributions(timespan, channel_id):
     contributed_deltas = {}
-    for player, data in prev_guild_members.items():
-        contributed_delta = guild_members[player]['contributed'] - data['contributed']
-        if contributed_delta == 0:
-            continue
-        contributed_deltas[player] = contributed_delta
-        db.update_member_contribution(uuid=data['uuid'], username=player, new_contribution=guild_members[player]['contributed'])
+    for player, data in guild_members.items():
+        try:
+            contributed_delta = guild_members[player]['contributed'] - db.get_latest_contribution(data['uuid'])
+            if contributed_delta <= 0:
+                continue
+            contributed_deltas[player] = contributed_delta
+            db.update_member_contribution(uuid=data['uuid'], username=player, new_contribution=guild_members[player]['contributed'])
+
+        except:
+            db.update_member_contribution(uuid=data['uuid'], username=player, new_contribution=guild_members[player]['contributed'])
 
     contributed_return_string = ''
     for player, amount in contributed_deltas.items():
