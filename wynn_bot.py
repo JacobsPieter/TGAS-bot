@@ -216,19 +216,10 @@ async def guild_api_query(guild_prefix):
     Args:
         guild_prefix (str): The guild prefix to query data for
     """
-    global guild_data, guild_members, GUILD_LOOP_STARTED  # pylint: disable=global-statement
+    global guild_data, guild_members # pylint: disable=global-statement
     guild_data = get_wynn_data(guild_prefix)
     guild_members = get_member_stats(guild_data)
 
-    #only runs the first time to generate a database
-    if not GUILD_LOOP_STARTED:
-        for player, data in guild_members.items():
-            db.update_member_contribution(uuid=data['uuid'], username=player,
-                                          new_contribution=data['contributed'])
-            for raid, amount in get_player_guild_raids(player, guild_members).items():
-                if not raid == 'total':
-                    db.update_raid_stat(uuid=data['uuid'], raid_name=raid, completions=amount)
-        GUILD_LOOP_STARTED = True
 
 
 
@@ -386,6 +377,12 @@ async def track_xp_contributions(interaction: discord.Interaction):
     target_channel_id = interaction.channel_id
     if target_channel_id is None:
         return
+    for player, data in guild_members.items():
+        db.update_member_contribution(uuid=data['uuid'], username=player,
+                                        new_contribution=data['contributed'])
+        for raid, amount in get_player_guild_raids(player, guild_members).items():
+            if not raid == 'total':
+                db.update_raid_stat(uuid=data['uuid'], raid_name=raid, completions=amount)
 
 
     await interaction.followup.send('*started tracking*')

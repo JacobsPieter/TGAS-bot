@@ -8,7 +8,7 @@ separators, and list items.
 
 The renderer creates multi-column layouts with customizable styling options
 including background colors, padding, and column widths. 
-TODO: It automatically downloads the required OpenSans font from Google Fonts if not already present.
+TODO:It automatically downloads the required OpenSans font from Google Fonts if not already present.
 
 Usage:
     render_markdown_card(
