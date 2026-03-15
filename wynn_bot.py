@@ -252,7 +252,7 @@ async def check_graid_completions(channel_id: int):
             if not raid == 'total':
                 if recent_completions > prev_completions[raid]:
                     new_completions[raid][player] = recent_completions - prev_completions[raid]
-                    db.update_raid_stat(data['uuid'], raid, new_completions[raid][player])
+                    db.update_raid_stat(data['uuid'], raid, recent_completions)
     for raid, raid_data in new_completions.items():
         completion_sum = 0
         for player, amount in raid_data.items():

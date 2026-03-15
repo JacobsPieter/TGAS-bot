@@ -192,7 +192,7 @@ class Database:
 
         row = self.cursor.fetchone()
 
-        if row is None or row["completions"] != completions:
+        if row is None or row["completions"] < completions:
 
             self.cursor.execute("""
             INSERT INTO raid_history (uuid, raid_name, completions, timestamp)
