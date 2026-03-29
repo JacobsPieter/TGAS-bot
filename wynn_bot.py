@@ -152,12 +152,13 @@ def get_latest_graid_completions(uuid) -> dict[str, int]:
     Returns:
         dict[str, int]: Dictionary mapping raid names to their latest completion counts
     """
-    possible_raids = ['Nest of the Grootslangs', "Orphion's Nexus of Light",
+    possible_raids = ['total', 'Nest of the Grootslangs', "Orphion's Nexus of Light",
                       'The Canyon Colossus', 'The Nameless Anomaly']
-    completions: dict = {'Nest of the Grootslangs': 0,
-                        "Orphion's Nexus of Light": 0,
-                        'The Canyon Colossus': 0,
-                        'The Nameless Anomaly': 0}
+    completions: dict = {'total': 0,
+                         'Nest of the Grootslangs': 0,
+                         "Orphion's Nexus of Light": 0,
+                         'The Canyon Colossus': 0,
+                         'The Nameless Anomaly': 0}
     for raid in possible_raids:
         completions[raid] = db.get_latest_raid_completions(uuid=uuid, raid_name=raid)
     return completions
@@ -240,6 +241,7 @@ async def check_graid_completions(channel_id: int):
     error_messages: str = ''
 
     new_completions: dict[str, dict[str, int]] = {
+        'total': {},
         'Nest of the Grootslangs': {},
         "Orphion's Nexus of Light": {},
         'The Canyon Colossus': {},
@@ -249,10 +251,9 @@ async def check_graid_completions(channel_id: int):
         prev_completions = get_latest_graid_completions(data['uuid'])
         completions = get_player_guild_raids(player, guild_members)
         for raid, recent_completions in completions.items():
-            if not raid == 'total':
-                if recent_completions > prev_completions[raid]:
-                    new_completions[raid][player] = recent_completions - prev_completions[raid]
-                    db.update_raid_stat(data['uuid'], raid, recent_completions)
+            if recent_completions > prev_completions[raid]:
+                new_completions[raid][player] = recent_completions - prev_completions[raid]
+                db.update_raid_stat(data['uuid'], raid, recent_completions)
     for raid, raid_data in new_completions.items():
         completion_sum = 0
         for player, amount in raid_data.items():
@@ -276,6 +277,7 @@ async def check_graid_completions(channel_id: int):
         await channel.send(
             content=error_messages,
             embed=embed)
+
 
 
 
@@ -404,8 +406,10 @@ async def raids(interaction: discord.Interaction):
     Args:
         interaction (discord.Interaction): The Discord interaction that triggered this command
     """
+    raid_data = {}
     await interaction.response.defer()
-    raid_data = get_guild_raids_per_player(get_member_stats(get_wynn_data()))
+    for player, data in guild_members.items():
+        raid_data[player] = get_latest_graid_completions(data['uuid'])
 
     complete_text = ''
     for player, stats in raid_data.items():

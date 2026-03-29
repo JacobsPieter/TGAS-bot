@@ -3,7 +3,7 @@
 __pycache__
 
 .env
-data.png
+*.png
 
 temp.py
 
