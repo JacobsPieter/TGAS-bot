@@ -64,7 +64,8 @@ def render_markdown_card(
     y = padding
     x = padding
     max_y = y
-    player_list: list = text.split('\\')
+    player_list: list = text.split('$[()')
+
 
     for i, player in enumerate(player_list):
         if i % math.floor(len(player_list)/collumns) == 0 and i != 0:

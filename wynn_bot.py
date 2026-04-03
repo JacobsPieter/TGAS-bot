@@ -17,6 +17,7 @@ Author: Pieter Jacobs
 """
 
 import os
+import random as rd
 
 
 import discord
@@ -183,6 +184,7 @@ class Info(discord.Client):
         Initialize the Discord bot client with default intents and command tree.
         """
         intents = discord.Intents.default()
+        intents.message_content = True
         super().__init__(intents=intents)
         self.tree = app_commands.CommandTree(self)
 
@@ -410,25 +412,35 @@ async def raids(interaction: discord.Interaction):
     await interaction.response.defer()
     for player, data in guild_members.items():
         raid_data[player] = get_latest_graid_completions(data['uuid'])
-
+    
     complete_text = ''
     for player, stats in raid_data.items():
-        text_template = f"""# {player}
-
-        Total: {stats['total']}
-        - NOTG: {stats['Nest of the Grootslangs']}
-        - NOL: {stats["Orphion's Nexus of Light"]}
-        - TCC: {stats['The Canyon Colossus']}
-        - TNA: {stats['The Nameless Anomaly']}
-        ==
-        \\"""
-        complete_text += text_template
+        text_template = f'# {player}\n\nTotal: {stats['total']}\n- NOTG: {stats['Nest of the Grootslangs']}\n- NOL: {stats["Orphion's Nexus of Light"]}\n- TCC: {stats['The Canyon Colossus']}\n- TNA: {stats['The Nameless Anomaly']}\n==\n$[()'
+        complete_text = ''.join((complete_text, text_template))
+    
     markdown_card.render_markdown_card(complete_text, 'data.png')
     with open('data.png', "rb") as f:
         data = discord.File(f)
     await interaction.followup.send(file=data)
 
 
+
+def send_random_gambling_encouragement_message():
+    messages = ['Yes, gamble!', 'Of course you should!', 'gamba', '90% of gamblers quit before they win big']
+    return rd.choice(messages)
+
+
+
+
+
+
+
+@client.event
+async def on_message(message):
+    if message.author == client.user:
+        return
+    if any(encouraged_behaviour in message.content.lower() for encouraged_behaviour in ['gamble', 'gamba', 'roll', 'gambling', 'gambler']):
+        await message.channel.send(send_random_gambling_encouragement_message())
 
 
 
