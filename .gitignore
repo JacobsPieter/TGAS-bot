@@ -7,4 +7,6 @@ __pycache__
 
 temp.py
 
-database.db
+testing
+
+*.db
