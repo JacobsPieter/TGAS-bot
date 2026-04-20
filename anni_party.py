@@ -46,6 +46,9 @@ from dotenv import load_dotenv
 import discord
 from discord.ext import commands
 
+
+load_dotenv()
+
 # ------------------ CONFIG ------------------
 # Bot token from environment variables
 TOKEN: str = os.getenv("BOT_TOKEN")  #type: ignore
@@ -60,8 +63,6 @@ intents.message_content = True  # Required for message content processing
 allowed_mentions = discord.AllowedMentions(users=True, roles=True)
 
 bot = commands.Bot(command_prefix="!", intents=intents)
-
-load_dotenv()
 
 # ------------------ DB ------------------
 conn = sqlite3.connect("anni_party_test.db", check_same_thread=False)
