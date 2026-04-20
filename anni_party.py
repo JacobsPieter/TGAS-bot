@@ -113,7 +113,7 @@ def set_current_anni_id(value: int):
     """
     set_meta("current_anni_id", str(value))
 
-def get_meta(key: str):
+def get_meta(key: str) -> str|None:
     """
     Gets a metadata value from the database.
 
@@ -661,6 +661,7 @@ async def setup_anni_parties(interaction: discord.Interaction, channel:discord.T
         channel (discord.TextChannel): The channel to set up for parties
     """
     set_meta('channel_id', str(channel.id))
+    await interaction.response.send_message(content='channel set!', ephemeral=True)
 
 @bot.event
 async def on_message(message: discord.Message):
@@ -673,7 +674,7 @@ async def on_message(message: discord.Message):
     if message.author.bot:
         return
 
-    if message.channel == get_meta('channel_id'):
+    if message.channel.id == int(get_meta('channel_id')):  #type: ignore
         if "Prelude to Annihilation!\nHateful echoes erupt from the Realm of War.\nWynn faces Annihilation." in message.content: #pylint: disable=line-too-long
             guild = message.guild
             if guild is None:
