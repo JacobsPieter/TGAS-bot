@@ -52,7 +52,6 @@ load_dotenv()
 # ------------------ CONFIG ------------------
 # Bot token from environment variables
 TOKEN: str = os.getenv("BOT_TOKEN")  #type: ignore
-LEADER_ROLE_ID = 987654321098765432  # Role ID for party leaders
 TEAM_SIZE = 10  # Maximum players per party
 
 # ------------------ BOT SETUP ------------------
@@ -411,6 +410,11 @@ async def send_test_embed(interaction: discord.Interaction):
         interaction (discord.Interaction): The interaction that triggered the command
     """
     await interaction.response.defer()
+    if interaction.user.get_role(int(get_meta('anni_permissions_role_id'))) is None:  #type: ignore
+        return interaction.response.send_message(
+            "You don't have permission to send this command",
+            ephemeral=True
+            )
     guild = interaction.guild
     if guild is None:
         await interaction.followup.send(content="apparently the discord server you are sending this from doesn't exist, please don't report. I don't want to deal with this") #pylint: disable=line-too-long
@@ -651,17 +655,28 @@ async def start_new_event(guild: discord.Guild):
     bot.add_view(AnniView())
     await update_live_message(guild)
 
-@bot.tree.command(name='setup_anni_parties')
-async def setup_anni_parties(interaction: discord.Interaction, channel:discord.TextChannel): # pylint: disable=unused-argument
+@bot.tree.command(
+        name='setup_anni_parties',
+        description='Used to configure the annihilation parties module of the mod.'
+        )
+async def setup_anni_parties(interaction: discord.Interaction, channel:discord.TextChannel, role: discord.Role): # pylint: disable=unused-argument,disable=line-too-long
     """
     Discord command to set up the Annihilation parties system for a specific channel.
 
     Args:
         interaction (discord.Interaction): The interaction that triggered the command
         channel (discord.TextChannel): The channel to set up for parties
+        role (discord.Role): The role needed for the commands to run for this module
     """
+    role_id = get_meta('anni_permissions_role_id')
+    if not role_id is None:
+        if interaction.user.get_role(int(role_id)) is None: # type: ignore pylint: disable=line-too-long
+            return await interaction.response.send_message(
+                content="You don't have permission to use this command"
+                )
     set_meta('channel_id', str(channel.id))
-    await interaction.response.send_message(content='channel set!', ephemeral=True)
+    set_meta('anni_permissions_role_id', str(role.id))
+    await interaction.response.send_message(content='channel and role set!', ephemeral=True)
 
 @bot.event
 async def on_message(message: discord.Message):
@@ -697,4 +712,8 @@ async def on_ready():
     await bot.tree.sync()
     print(f"Logged in as {bot.user}")
 
-bot.run(TOKEN)
+
+if __name__ == '__main__':
+
+
+    bot.run(TOKEN)
