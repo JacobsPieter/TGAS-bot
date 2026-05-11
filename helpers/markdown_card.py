@@ -28,7 +28,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 FONT_URL = "https://fonts.gstatic.com/s/opensans/v14/cJZK" \
             "eOuBrn4kERxqtaUH3SZ2oysoEQEeKwjgmXLRnTc.ttf"
-FONT_PATH = "OpenSans-Regular.ttf"
+FONT_PATH = "data\\OpenSans-Regular.ttf"
 
 def render_markdown_card(
     text: str,

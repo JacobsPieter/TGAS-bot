@@ -36,7 +36,7 @@ class Database:
         cursor (sqlite3.Cursor): Database cursor for executing queries
     """
 
-    def __init__(self, path="database.db"):
+    def __init__(self, path="helpers\\database.py"):
         """
         Initialize the database connection and create required tables.
         

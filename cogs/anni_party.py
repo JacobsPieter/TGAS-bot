@@ -45,6 +45,7 @@ from dotenv import load_dotenv
 
 import discord
 from discord.ext import commands
+from discord import app_commands
 
 
 load_dotenv()
@@ -64,7 +65,7 @@ allowed_mentions = discord.AllowedMentions(users=True, roles=True)
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ------------------ DB ------------------
-conn = sqlite3.connect("anni_party_test.db", check_same_thread=False)
+conn = sqlite3.connect("persistent_data\\anni_party.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("""
@@ -401,8 +402,8 @@ async def create_embeds(guild: discord.Guild):
         embeds.append(unsure_list)
     return embeds
 
-@bot.tree.command(name='send_test_embed')
-async def send_test_embed(interaction: discord.Interaction):
+@bot.tree.command(name='manual_start_anni')
+async def manual_start_anni(interaction: discord.Interaction):
     """
     Discord command to send a test embed and start the signup process.
 
@@ -689,12 +690,14 @@ async def on_message(message: discord.Message):
     if message.author.bot:
         return
 
-    if message.channel.id == int(get_meta('channel_id')):  #type: ignore
-        if "Prelude to Annihilation!\nHateful echoes erupt from the Realm of War.\nWynn faces Annihilation." in message.content: #pylint: disable=line-too-long
-            guild = message.guild
-            if guild is None:
-                return
-            await start_new_event(guild)
+    channel_id = get_meta('channel_id')  #type: ignore
+    if not channel_id is None:
+        if message.channel.id == int(channel_id):
+            if "Prelude to Annihilation!\nHateful echoes erupt from the Realm of War.\nWynn faces Annihilation." in message.content: #pylint: disable=line-too-long
+                guild = message.guild
+                if guild is None:
+                    return
+                await start_new_event(guild)
 
     await bot.process_commands(message)
 
@@ -711,6 +714,79 @@ async def on_ready():
 
     await bot.tree.sync()
     print(f"Logged in as {bot.user}")
+
+
+class AnniParty(commands.Cog):
+    def __init__(self, self_bot):
+        self.bot = self_bot
+    
+    @app_commands.command(name='setup_anni_parties',
+        description='Used to configure the annihilation parties module of the mod.'
+        )
+    async def setup_anni_parties(self, interaction: discord.Interaction, channel:discord.TextChannel, role: discord.Role): # pylint: disable=unused-argument,disable=line-too-long
+        """
+        Discord command to set up the Annihilation parties system for a specific channel.
+
+        Args:
+            interaction (discord.Interaction): The interaction that triggered the command
+            channel (discord.TextChannel): The channel to set up for parties
+            role (discord.Role): The role needed for the commands to run for this module
+        """
+        role_id = get_meta('anni_permissions_role_id')
+        if not role_id is None:
+            if interaction.user.get_role(int(role_id)) is None: # type: ignore pylint: disable=line-too-long
+                return await interaction.response.send_message(
+                    content="You don't have permission to use this command"
+                    )
+        set_meta('channel_id', str(channel.id))
+        set_meta('anni_permissions_role_id', str(role.id))
+        await interaction.response.send_message(content='channel and role set!', ephemeral=True)
+    
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        """
+        Event handler for detecting new Annihilation events from game messages.
+
+        Args:
+            message (discord.Message): The message that was received
+        """
+        if message.author.bot:
+            return
+
+        channel_id = get_meta('channel_id')  #type: ignore
+        if not channel_id is None:
+            if message.channel.id == int(channel_id):
+                if "Prelude to Annihilation!\nHateful echoes erupt from the Realm of War.\nWynn faces Annihilation." in message.content: #pylint: disable=line-too-long
+                    guild = message.guild
+                    if guild is None:
+                        return
+                    await start_new_event(guild)
+
+    @app_commands.command(name='manual_start_anni')
+    async def manual_start_anni(self, interaction: discord.Interaction):
+        """
+        Discord command to send a test embed and start the signup process.
+
+        Args:
+            interaction (discord.Interaction): The interaction that triggered the command
+        """
+        await interaction.response.defer()
+        if interaction.user.get_role(int(get_meta('anni_permissions_role_id'))) is None:  #type: ignore
+            return interaction.response.send_message(
+                "You don't have permission to send this command",
+                ephemeral=True
+                )
+        guild = interaction.guild
+        if guild is None:
+            await interaction.followup.send(content="apparently the discord server you are sending this from doesn't exist, please don't report. I don't want to deal with this") #pylint: disable=line-too-long
+            return
+        await interaction.followup.send(content='started signups!', ephemeral=True)
+        await start_new_event(guild)
+
+async def setup(global_bot):
+    await global_bot.add_cog(AnniParty(bot))
+
+
 
 
 if __name__ == '__main__':

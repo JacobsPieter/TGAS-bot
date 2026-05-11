@@ -42,8 +42,8 @@ from discord.ext import tasks
 import requests
 from dotenv import load_dotenv
 
-import database
-import markdown_card
+import helpers.database as database
+import helpers.markdown_card as markdown_card
 
 # Font configuration
 FONT_URL = "https://fonts.gstatic.com/s/opensans/v14/cJZKeOuBrn4kERxqtaUH3SZ2oysoEQEeKwjgmXLRnTc.ttf"  # pylint: disable=line-too-long
@@ -451,8 +451,8 @@ async def raids(interaction: discord.Interaction):
         text_template = f'# {player}\n\nTotal: {stats['total']}\n- NOTG: {stats['Nest of the Grootslangs']}\n- NOL: {stats["Orphion's Nexus of Light"]}\n- TCC: {stats['The Canyon Colossus']}\n- TNA: {stats['The Nameless Anomaly']}\n==\n$[()'  # pylint: disable=line-too-long
         complete_text = ''.join((complete_text, text_template))
 
-    markdown_card.render_markdown_card(complete_text, 'data.png')
-    with open('data.png', "rb") as f:
+    markdown_card.render_markdown_card(complete_text, 'data\\data.png')
+    with open('data\\data.png', "rb") as f:
         data = discord.File(f)
     await interaction.followup.send(file=data)
 
@@ -497,5 +497,5 @@ async def on_message(message):
     if any(encouraged_behaviour in message.content.lower() for encouraged_behaviour in encouraged_words):  # pylint: disable=line-too-long
         await message.channel.send(send_random_gambling_encouragement_message())
 
-
-client.run(BOT_TOKEN)
+if __name__ == '__main__':
+    client.run(BOT_TOKEN)
