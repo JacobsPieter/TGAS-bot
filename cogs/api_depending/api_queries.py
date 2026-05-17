@@ -881,11 +881,12 @@ def get_completed_graids(member: APIMember):
 
 class APIQueries(commands.Cog):
     def __init__(self, passed_bot):
-        self.bot = passed_bot
+        self.bot: discord.Client = passed_bot
 
     @app_commands.command(name="start-loop")
     async def start_loop(self, interaction: discord.Interaction):
         await self.fetch_guild_endpoint.start()
+        await interaction.response.send_message(content="started", ephemeral=True)
 
     @app_commands.command(name="set_graid_channel")
     async def set_channel_for_graids(self, interaction: discord.Interaction, channel:discord.TextChannel, role: discord.Role):
@@ -931,9 +932,10 @@ class APIQueries(commands.Cog):
 
         guild = interaction.guild
         if not guild is None:
-            await send_discord_graids_completed_message(completed_graids=completed_graids)
+            await self.send_discord_graids_completed_message(completed_graids=completed_graids)
             await interaction.followup.send("it worked!")
         else:
+            print("guild Error")
             return
 
 
@@ -971,91 +973,103 @@ class APIQueries(commands.Cog):
                 member.update_member_database()
             
 
-        await send_discord_graids_completed_message(completed_graids=completed_graids)
+        await self.send_discord_graids_completed_message(completed_graids=completed_graids)
 
 
-async def send_discord_graids_completed_message(completed_graids: dict[str, dict[str, int]]):
-    channel_id: int = int(db.get_meta("graid_message_channel")) #type: ignore
-    channel = bot.get_channel(channel_id)
-    if channel is None:
-        return
-    if not isinstance(channel, (discord.TextChannel)):
-        return
-    guild = channel.guild
+    async def send_discord_graids_completed_message(self, completed_graids: dict[str, dict[str, int]]):
+        channel_id = db.get_meta("graid_message_channel")
+        if channel_id is None:
+            print("got the culprit")
+            return
+        channel = self.bot.get_channel(int(channel_id))
+        if channel is None:
+            await self.bot.fetch_channel(int(channel_id))
+            channel = self.bot.get_channel(int(channel_id))
+            if channel is None:
+                print("here!")
+                return
+        if not isinstance(channel, (discord.abc.GuildChannel)):
+            print("WHY")
+            return
+        guild = channel.guild
 
-    embeds = []
-    for raid, players in completed_graids.items():
-        description = ""
-        image = None
-        colour = discord.Color.default()
-        raid_name = raid
-        if not len(players) > 0:
-            continue
-        for player, amount in players.items():
-            playerdata = db.fetch_member(player)
-            if not playerdata is None:
-                username: str = playerdata['username']
-                name = guild.get_member_named(username) if not guild is None else None
-                playername = name.mention if not name is None else username
-            else:
-                username = player
-                playername = player
-            spaces_amount = 16 - len(username)
-            spaces = " " * spaces_amount
-            player_description = "".join((f'{playername}\u200b', spaces, f' | {amount}'))
-            description = f'{description}\n{player_description}'
-            match raid:
-                case "notg":
-                    image = "https://cdn.wynncraft.com/nextgen/raids/Nest%20of%20the%20Grootslangs.webp"
-                    colour = discord.Color.dark_green()
-                    raid_name = "Nest of the Grootslangs"
-                case "nol":
-                    image = "https://cdn.wynncraft.com/nextgen/raids/Orphion's%20Nexus%20of%20Light.webp"
-                    colour = discord.Color.yellow()
-                    raid_name = "Orphion's Nexus of Light"
-                case "tcc":
-                    image = "https://cdn.wynncraft.com/nextgen/raids/The%20Canyon%20Colossus.webp"
-                    colour = discord.Color.blue()
-                    raid_name = "The Canyon Colossus"
-                case "tna":
-                    image = "https://cdn.wynncraft.com/nextgen/raids/The%20Nameless%20Anomaly.webp"
-                    colour = discord.Color.dark_purple()
-                    raid_name = "The Nameless Anomaly"
-                case "wtp":
-                    image = "https://cdn.wynncraft.com/nextgen/raids/The%20Wartorn%20Palace.webp"
-                    colour = discord.Color.brand_red()
-                    raid_name = "The Wartorn Palace"
-        embed = discord.Embed(title=raid_name, description=description, colour=colour, timestamp=datetime.datetime.now())
-        embed.set_thumbnail(url=image)
+        embeds = []
+        for raid, players in completed_graids.items():
+            description = ""
+            image = None
+            colour = discord.Color.default()
+            raid_name = raid
+            if not len(players) > 0:
+                continue
+            for player, amount in players.items():
+                playerdata = db.fetch_member(player)
+                if not playerdata is None:
+                    username: str = playerdata['username']
+                    name = guild.get_member_named(username) if not guild is None else None
+                    playername = name.mention if not name is None else username
+                else:
+                    username = player
+                    playername = player
+                spaces_amount = 16 - len(username)
+                spaces = " " * spaces_amount
+                player_description = "".join((f'{playername}\u200b', spaces, f' | {amount}'))
+                description = f'{description}\n{player_description}'
+                match raid:
+                    case "notg":
+                        image = "https://cdn.wynncraft.com/nextgen/raids/Nest%20of%20the%20Grootslangs.webp"
+                        colour = discord.Color.dark_green()
+                        raid_name = "Nest of the Grootslangs"
+                    case "nol":
+                        image = "https://cdn.wynncraft.com/nextgen/raids/Orphion's%20Nexus%20of%20Light.webp"
+                        colour = discord.Color.yellow()
+                        raid_name = "Orphion's Nexus of Light"
+                    case "tcc":
+                        image = "https://cdn.wynncraft.com/nextgen/raids/The%20Canyon%20Colossus.webp"
+                        colour = discord.Color.blue()
+                        raid_name = "The Canyon Colossus"
+                    case "tna":
+                        image = "https://cdn.wynncraft.com/nextgen/raids/The%20Nameless%20Anomaly.webp"
+                        colour = discord.Color.dark_purple()
+                        raid_name = "The Nameless Anomaly"
+                    case "wtp":
+                        image = "https://cdn.wynncraft.com/nextgen/raids/The%20Wartorn%20Palace.webp"
+                        colour = discord.Color.brand_red()
+                        raid_name = "The Wartorn Palace"
+            embed = discord.Embed(title=raid_name, description=description, colour=colour, timestamp=datetime.datetime.now())
+            embed.set_thumbnail(url=image)
 
-        #commented out till this can be cleared using the api, manual command would be too cumbersome
-        """aspect_reward_string = ""
-        half_aspects_string = ""
-        guild_raids_from_db = db.fetch_all_member_guild_raids()
-        for member, data in guild_raids_from_db.items():
-            playerdata = db.fetch_member(member)
-            if not playerdata is None:
-                username: str = playerdata['username']
-                name = guild.get_member_named(username) if not guild is None else None
-                playername = name.mention if not name is None else username
-            else:
-                username = member
-                playername = member
-            if data["aspects"] > 0:
-                aspect_reward_string = f'{aspect_reward_string}\n{playername} | {data["aspects"]}'
-            if data["next_aspect"] > 0:
-                half_aspects_string = f'{half_aspects_string}\n{playername}'
-                
-
-
-        embed.add_field(name="aspects to reward", value=aspect_reward_string)
-        embed.add_field(name="needs to complete another raid\nto get an aspect", value=half_aspects_string)"""
+            #commented out till this can be cleared using the api, manual command would be too cumbersome
+            """aspect_reward_string = ""
+            half_aspects_string = ""
+            guild_raids_from_db = db.fetch_all_member_guild_raids()
+            for member, data in guild_raids_from_db.items():
+                playerdata = db.fetch_member(member)
+                if not playerdata is None:
+                    username: str = playerdata['username']
+                    name = guild.get_member_named(username) if not guild is None else None
+                    playername = name.mention if not name is None else username
+                else:
+                    username = member
+                    playername = member
+                if data["aspects"] > 0:
+                    aspect_reward_string = f'{aspect_reward_string}\n{playername} | {data["aspects"]}'
+                if data["next_aspect"] > 0:
+                    half_aspects_string = f'{half_aspects_string}\n{playername}'
+                    
 
 
-        embeds.append(embed)
-    
-    if len(embeds) > 0:
-        await channel.send(embeds=embeds)
+            embed.add_field(name="aspects to reward", value=aspect_reward_string)
+            embed.add_field(name="needs to complete another raid\nto get an aspect", value=half_aspects_string)"""
+
+
+            embeds.append(embed)
+        
+        print("here I am!")
+        if len(embeds) > 0:
+            if isinstance(channel, (discord.ForumChannel, discord.CategoryChannel)):
+                return
+            await channel.send(embeds=embeds)
+            print("sent!")
 
 
 
@@ -1086,7 +1100,7 @@ def main():
 
 async def setup(global_bot):
     main()
-    await global_bot.add_cog(APIQueries(bot))
+    await global_bot.add_cog(APIQueries(global_bot))
 
     
 
