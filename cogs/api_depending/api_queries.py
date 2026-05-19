@@ -9,6 +9,7 @@ import requests
 import discord
 from discord import app_commands
 from discord.ext import tasks, commands
+from discord import ui
 
 
 load_dotenv()
@@ -820,7 +821,7 @@ class APIMember:
             self.wtp_completions = None
         
         if not memberdata['restrictions']['weekly_access']:
-            self.weekly = memberdata['weekly']['completed']
+            self.weekly = 1 if memberdata['weekly']['completed'] else 0
             self.weekly_streak = memberdata['weekly']['streak']
         else:
             self.weekly = None
@@ -877,16 +878,41 @@ def get_completed_graids(member: APIMember):
         completed_graids_dict.pop(raid)
     return completed_graids_dict
 
+def mention_user(user_uuid: str, guild: discord.Guild) -> str:
+    playerdata = db.fetch_member(user_uuid)
+    if not playerdata is None:
+        username: str = playerdata['username']
+        name = guild.get_member_named(username) if not guild is None else None
+        playername = name.mention if not name is None else username
+    else:
+        username = user_uuid
+        playername = user_uuid
+    return playername
+
+
+def get_player_username(player_uuid: str) -> str:
+    playerdata = db.fetch_member(player_uuid)
+    if not playerdata is None:
+        playername: str = playerdata['username']
+    else:
+        playername = player_uuid
+    return playername
 
 
 class APIQueries(commands.Cog):
     def __init__(self, passed_bot):
         self.bot: discord.Client = passed_bot
 
-    @app_commands.command(name="start-loop")
-    async def start_loop(self, interaction: discord.Interaction):
+
+    def __await__(self):
+        async def closure():
+            await self.start_loop()
+            return self
+        return closure().__await__()
+
+    async def start_loop(self):
         await self.fetch_guild_endpoint.start()
-        await interaction.response.send_message(content="started", ephemeral=True)
+
 
     @app_commands.command(name="set_graid_channel")
     async def set_channel_for_graids(self, interaction: discord.Interaction, channel:discord.TextChannel, role: discord.Role):
@@ -900,43 +926,6 @@ class APIQueries(commands.Cog):
         db.set_meta('guild_id', str(channel.guild))
         db.set_meta('api_queries_role_id', str(role.id))
         await interaction.response.send_message(content='channel and role set!', ephemeral=True)
-
-    @app_commands.command(name="test_graids")
-    async def fetch_guild_endpoint_test(self, interaction: discord.Interaction):
-        data = {}
-        await interaction.response.defer()
-        #TODO: implement guild global data handling
-        previous_members = db.fetch_all_current_members()
-        completed_graids: dict[str, dict[str, int]] = {
-            "notg": {},
-            "nol": {},
-            "tcc": {},
-            "tna": {},
-            "wtp": {},
-        }
-        for rank, rank_members in data['members'].items():
-            if not rank in {"owner", "chief", "strategist", "captain", "recruiter", "recruit"}: # all guild ranks, will need updating in case of update
-                continue
-            for guild_member, member_data in rank_members.items():
-                member = APIMember(guild_member, member_data, rank)
-                if previous_members.get(guild_member) is None:
-                    member.update_member_database()
-                    member.update_member_guild_raids()
-                    continue
-                if previous_members[guild_member]['total_guild_raids'] < member.total_guild_raids:
-                    player_completed_raids = get_completed_graids(member)
-                    for raid, amount in player_completed_raids.items():
-                        completed_graids[raid][member.uuid] = amount
-                    member.update_member_guild_raids()
-                member.update_member_database()
-
-        guild = interaction.guild
-        if not guild is None:
-            await self.send_discord_graids_completed_message(completed_graids=completed_graids)
-            await interaction.followup.send("it worked!")
-        else:
-            print("guild Error")
-            return
 
 
     @tasks.loop(minutes=2)
@@ -971,7 +960,7 @@ class APIQueries(commands.Cog):
                         completed_graids[raid][member.uuid] = amount
                     member.update_member_guild_raids()
                 member.update_member_database()
-            
+
 
         await self.send_discord_graids_completed_message(completed_graids=completed_graids)
 
@@ -1002,17 +991,8 @@ class APIQueries(commands.Cog):
             if not len(players) > 0:
                 continue
             for player, amount in players.items():
-                playerdata = db.fetch_member(player)
-                if not playerdata is None:
-                    username: str = playerdata['username']
-                    name = guild.get_member_named(username) if not guild is None else None
-                    playername = name.mention if not name is None else username
-                else:
-                    username = player
-                    playername = player
-                spaces_amount = 16 - len(username)
-                spaces = " " * spaces_amount
-                player_description = "".join((f'{playername}\u200b', spaces, f' | {amount}'))
+
+                player_description = "".join((f'{mention_user(player, guild)}\u200b | {amount}'))
                 description = f'{description}\n{player_description}'
                 match raid:
                     case "notg":
@@ -1038,38 +1018,89 @@ class APIQueries(commands.Cog):
             embed = discord.Embed(title=raid_name, description=description, colour=colour, timestamp=datetime.datetime.now())
             embed.set_thumbnail(url=image)
 
-            #commented out till this can be cleared using the api, manual command would be too cumbersome
-            """aspect_reward_string = ""
-            half_aspects_string = ""
-            guild_raids_from_db = db.fetch_all_member_guild_raids()
-            for member, data in guild_raids_from_db.items():
-                playerdata = db.fetch_member(member)
-                if not playerdata is None:
-                    username: str = playerdata['username']
-                    name = guild.get_member_named(username) if not guild is None else None
-                    playername = name.mention if not name is None else username
-                else:
-                    username = member
-                    playername = member
-                if data["aspects"] > 0:
-                    aspect_reward_string = f'{aspect_reward_string}\n{playername} | {data["aspects"]}'
-                if data["next_aspect"] > 0:
-                    half_aspects_string = f'{half_aspects_string}\n{playername}'
-                    
-
-
-            embed.add_field(name="aspects to reward", value=aspect_reward_string)
-            embed.add_field(name="needs to complete another raid\nto get an aspect", value=half_aspects_string)"""
 
 
             embeds.append(embed)
+
+        aspect_embed = discord.Embed(title="Aspects", colour=discord.Color.magenta(), timestamp=datetime.datetime.now())
+        aspect_reward_string = ""
+        half_aspects_string = ""
+        guild_raids_from_db = db.fetch_all_member_guild_raids()
+        for member, data in guild_raids_from_db.items():
+            playerdata = db.fetch_member(member)
+            if not playerdata is None:
+                username: str = playerdata['username']
+                name = guild.get_member_named(username) if not guild is None else None
+                playername = name.mention if not name is None else username
+            else:
+                username = member
+                playername = member
+            if data["aspects"] > 0:
+                aspect_reward_string = f'{aspect_reward_string}\n{playername} | {data["aspects"]}'
+            if data["next_aspect"] > 0:
+                half_aspects_string = f'{half_aspects_string}\n{playername}'
+                
+
+
+        aspect_embed.add_field(name="aspects to reward", value=aspect_reward_string)
+        aspect_embed.add_field(name="needs to complete another raid\nto get an aspect", value=half_aspects_string)
+
+        embeds.append(aspect_embed)
         
-        print("here I am!")
         if len(embeds) > 0:
             if isinstance(channel, (discord.ForumChannel, discord.CategoryChannel)):
                 return
             await channel.send(embeds=embeds)
-            print("sent!")
+    
+
+    @app_commands.command(name="set_aspects_rewarded")
+    async def reward_aspects(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(AspectRewardModal())
+    
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        await api_queries
+
+
+
+
+
+
+
+class AspectRewardModal(discord.ui.Modal, title="Aspects rewarded in-game"):
+    def __init__(self):
+        super().__init__()
+        db_result = db.fetch_all_member_guild_raids()
+        self.aspects_by_player: dict[str, int] = {member: data["aspects"] for member, data in db_result.items() if data["aspects"] > 0}
+        self.create_modal_items()
+
+    def create_modal_items(self):
+        options = []
+        for player, amount in self.aspects_by_player.items():
+            to_add = discord.CheckboxGroupOption(label=f"{amount} aspects rewarded to {get_player_username(player)}", value=player)
+            options.append(to_add)
+            if len(options) >= 10:
+                add_option_group = ui.Label(text="ㅤ", component=ui.CheckboxGroup(options=options, max_values=len(options), min_values=0, required=False))
+                self.add_item(add_option_group)
+                options = options[10:]
+        if len(options) > 0:
+            add_option_group = ui.Label(text="ㅤ", component=ui.CheckboxGroup(options=options, max_values=len(options), min_values=0, required=False))
+            self.add_item(add_option_group)
+
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        reset_players = []
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message("please send this from a guild", ephemeral=True)
+            return
+        for item in self.walk_children():
+            if isinstance(item, ui.CheckboxGroup):
+                for player in item.values:
+                    db.update_member_guild_raids(player, aspects=0)
+                    reset_players.append(player)
+        await interaction.response.send_message(f"reset aspects for {', '.join(map(str,(mention_user(player, guild) for player in reset_players)))}", ephemeral=True)
 
 
 
@@ -1082,30 +1113,24 @@ class APIQueries(commands.Cog):
 
 
 
-
-
-
-
-
-
-
-def main():
-    global api_handler, db
+def main(global_bot):
+    global api_handler, db, api_queries
     api_handler = APIHandler()
     db = DataBaseHandler()
+    api_queries = APIQueries(global_bot)
 
     
 
 
 
 async def setup(global_bot):
-    main()
-    await global_bot.add_cog(APIQueries(global_bot))
+    main(global_bot)
+    await global_bot.add_cog(api_queries)
 
     
 
 if __name__ == '__main__':
-    main()
+    main(bot)
     #print(api_handler.get_endpoint_data("https://api.wynncraft.com/v3/player/Jacobs0811?fullResult"))
     #api_handler.dump_endpoint_data(api_handler.construct_guild_endpoint_url())
     #test = fetch_guild_endpoint()
