@@ -1027,27 +1027,21 @@ class APIQueries(commands.Cog):
         half_aspects_string = ""
         guild_raids_from_db = db.fetch_all_member_guild_raids()
         for member, data in guild_raids_from_db.items():
-            playerdata = db.fetch_member(member)
-            if not playerdata is None:
-                username: str = playerdata['username']
-                name = guild.get_member_named(username) if not guild is None else None
-                playername = name.mention if not name is None else username
-            else:
-                username = member
-                playername = member
             if data["aspects"] > 0:
-                aspect_reward_string = f'{aspect_reward_string}\n{playername} | {data["aspects"]}'
+                aspect_reward_string = f'{aspect_reward_string}\n{mention_user(member, guild)} | {data["aspects"]}'
             if data["next_aspect"] > 0:
-                half_aspects_string = f'{half_aspects_string}\n{playername}'
+                half_aspects_string = f'{half_aspects_string}\n{mention_user(member, guild)}'
                 
 
 
         aspect_embed.add_field(name="aspects to reward", value=aspect_reward_string)
         aspect_embed.add_field(name="needs to complete another raid\nto get an aspect", value=half_aspects_string)
 
-        embeds.append(aspect_embed)
         
         if len(embeds) > 0:
+            
+            embeds.append(aspect_embed)
+
             if isinstance(channel, (discord.ForumChannel, discord.CategoryChannel)):
                 return
             await channel.send(embeds=embeds)
