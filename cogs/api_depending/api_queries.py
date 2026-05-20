@@ -912,6 +912,7 @@ class APIQueries(commands.Cog):
 
     async def start_loop(self):
         await self.fetch_guild_endpoint.start()
+        print("Loop for querying the WynnAPI has been started.")
 
 
     @app_commands.command(name="set_graid_channel")
@@ -930,7 +931,6 @@ class APIQueries(commands.Cog):
 
     @tasks.loop(minutes=2)
     async def fetch_guild_endpoint(self):
-        print("started")
         data = api_handler.get_endpoint_data(api_handler.construct_guild_endpoint_url())
 
         #TODO: implement guild global data handling
@@ -968,17 +968,15 @@ class APIQueries(commands.Cog):
     async def send_discord_graids_completed_message(self, completed_graids: dict[str, dict[str, int]]):
         channel_id = db.get_meta("graid_message_channel")
         if channel_id is None:
-            print("got the culprit")
+            print("Channel needs to be set! Use the command for setting up this module to set the channel.")
             return
         channel = self.bot.get_channel(int(channel_id))
         if channel is None:
             await self.bot.fetch_channel(int(channel_id))
             channel = self.bot.get_channel(int(channel_id))
             if channel is None:
-                print("here!")
                 return
         if not isinstance(channel, (discord.abc.GuildChannel)):
-            print("WHY")
             return
         guild = channel.guild
 
@@ -1039,7 +1037,7 @@ class APIQueries(commands.Cog):
 
         
         if len(embeds) > 0:
-            
+
             embeds.append(aspect_embed)
 
             if isinstance(channel, (discord.ForumChannel, discord.CategoryChannel)):
@@ -1081,6 +1079,9 @@ class AspectRewardModal(discord.ui.Modal, title="Aspects rewarded in-game"):
         if len(options) > 0:
             add_option_group = ui.Label(text="ㅤ", component=ui.CheckboxGroup(options=options, max_values=len(options), min_values=0, required=False))
             self.add_item(add_option_group)
+        if self.total_children_count == 0:
+            empty_text = ui.TextDisplay(content="All aspects have been rewarded!")
+            self.add_item(empty_text)
 
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
@@ -1094,7 +1095,13 @@ class AspectRewardModal(discord.ui.Modal, title="Aspects rewarded in-game"):
                 for player in item.values:
                     db.update_member_guild_raids(player, aspects=0)
                     reset_players.append(player)
-        await interaction.response.send_message(f"reset aspects for {', '.join(map(str,(mention_user(player, guild) for player in reset_players)))}", ephemeral=True)
+        if len(reset_players) > 0:
+            message = f"reset aspects for {', '.join(map(str,(mention_user(player, guild) for player in reset_players)))}"
+            await interaction.response.send_message(message, ephemeral=True)
+        else:
+            message = "ㅤ"
+            await interaction.response.send_message(message, ephemeral=True, delete_after=0)
+        
 
 
 
