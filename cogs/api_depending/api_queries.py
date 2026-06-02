@@ -805,12 +805,12 @@ class APIMember:
         
         if not memberdata['restrictions']['main_access']:
             self.playtime = memberdata['globalData']['playtime']
-            self.total_guild_raids = memberdata['globalData']['guildRaids']['total']
-            self.notg_completions = memberdata['globalData']['guildRaids']['list']['Nest of the Grootslangs']
-            self.nol_completions = memberdata['globalData']['guildRaids']['list']["Orphion's Nexus of Light"]
-            self.tcc_completions = memberdata['globalData']['guildRaids']['list']['The Canyon Colossus']
-            self.tna_completions = memberdata['globalData']['guildRaids']['list']['The Nameless Anomaly']
-            self.wtp_completions = memberdata['globalData']['guildRaids']['list']['The Wartorn Palace']
+            self.total_guild_raids = memberdata['globalData']['currentGuildRaids']['total']
+            self.notg_completions = memberdata['globalData']['currentGuildRaids']['list']['Nest of the Grootslangs']
+            self.nol_completions = memberdata['globalData']['currentGuildRaids']['list']["Orphion's Nexus of Light"]
+            self.tcc_completions = memberdata['globalData']['currentGuildRaids']['list']['The Canyon Colossus']
+            self.tna_completions = memberdata['globalData']['currentGuildRaids']['list']['The Nameless Anomaly']
+            self.wtp_completions = memberdata['globalData']['currentGuildRaids']['list']['The Wartorn Palace']
         else:
             self.playtime = None
             self.total_guild_raids = None
@@ -820,7 +820,7 @@ class APIMember:
             self.tna_completions = None
             self.wtp_completions = None
         
-        if not memberdata['restrictions']['weekly_access']:
+        if not memberdata['restrictions']['guild_high_ranked_access']:
             self.weekly = 1 if memberdata['weekly']['completed'] else 0
             self.weekly_streak = memberdata['weekly']['streak']
         else:
