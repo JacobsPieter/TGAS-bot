@@ -10,3 +10,6 @@ temp.py
 testing
 
 *.db
+
+TODO.md
+api_database.py
