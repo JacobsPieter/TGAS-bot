@@ -11,13 +11,14 @@ from discord import app_commands
 from discord.ext import tasks, commands
 from discord import ui
 
+import cogs.api_depending.api_database as db
+
 
 load_dotenv()
 
 # ------------------ CONFIG ------------------
 # Bot token from environment variables
 TOKEN: str = os.getenv("BOT_TOKEN")  #type: ignore
-GUILD_ID = 1475943041570312285 #TODO: IMPLEMENT CORRECT LOGIC FOR IT __VERY TEMPORARY__
 
 # ------------------ BOT SETUP ------------------
 intents = discord.Intents.default()
@@ -64,6 +65,51 @@ class APIHandler:
 
         with open("testing\\playerdata.json", 'w') as file: #pylint: disable=unspecified-encoding
             json.dump(self.get_endpoint(url).json(), file)
+
+
+def init_database(database_path: str = ".\\persistent_data\\guild_api_database.db"):
+    global meta, members_db, member_guild_raids_db # pylint: disable=global-variable-undefined
+
+    p = database_path
+
+    meta = db.UpdatingTable("meta", p)
+    meta.create(('key', str()), {'value': str()})
+
+    members_db = db.UpdatingTable('members', p)
+    members_db.create(
+        ('uuid', str()),
+        {
+            'username': str(),
+            'guild_rank': str(),
+            'last_seen': datetime.datetime.now(),
+            'playtime': float(),
+            'weekly': bool(),
+            'weekly_streak': int(),
+            'contributed': int(),
+            'contribution_rank': int(),
+            'joined_guild': datetime.datetime.now(),
+            'left_guild': bool(),
+            'total_guild_raids': int(),
+            'wars': int()
+        })
+    
+    member_guild_raids_db = db.UpdatingTable('member_guild_raids', p)
+    member_guild_raids_db.create(
+        ('uuid', str()),
+        {
+            'total': int(),
+            'notg': int(),
+            'nol': int(),
+            'tcc': int(),
+            'tna': int(),
+            'wtp': int(),
+            'aspects': int(),
+            'next_aspect': int()
+        }
+        )
+
+
+
 
 
 class DataBaseHandler:
@@ -796,21 +842,20 @@ class APIMember:
         self.username = memberdata['username']
         self.guild_rank = rank
 
-        self.aspects = None
-        self.next_aspect = None
         if not memberdata['lastJoin'] is None:
-            self.last_online = int(datetime.datetime.fromisoformat(memberdata['lastJoin'].replace("Z", "+00:00")).timestamp())
+            self.last_online = datetime.datetime.fromisoformat(memberdata['lastJoin'].replace("Z", "+00:00"))
         else:
             self.last_online = 0
         
         if not memberdata['restrictions']['main_access']:
             self.playtime = memberdata['globalData']['playtime']
-            self.total_guild_raids = memberdata['globalData']['guildRaids']['total']
-            self.notg_completions = memberdata['globalData']['guildRaids']['list']['Nest of the Grootslangs']
-            self.nol_completions = memberdata['globalData']['guildRaids']['list']["Orphion's Nexus of Light"]
-            self.tcc_completions = memberdata['globalData']['guildRaids']['list']['The Canyon Colossus']
-            self.tna_completions = memberdata['globalData']['guildRaids']['list']['The Nameless Anomaly']
-            self.wtp_completions = memberdata['globalData']['guildRaids']['list']['The Wartorn Palace']
+            self.total_guild_raids = memberdata['globalData']['currentGuildRaids']['total']
+            self.notg_completions = memberdata['globalData']['currentGuildRaids']['list']['Nest of the Grootslangs']
+            self.nol_completions = memberdata['globalData']['currentGuildRaids']['list']["Orphion's Nexus of Light"]
+            self.tcc_completions = memberdata['globalData']['currentGuildRaids']['list']['The Canyon Colossus']
+            self.tna_completions = memberdata['globalData']['currentGuildRaids']['list']['The Nameless Anomaly']
+            self.wtp_completions = memberdata['globalData']['currentGuildRaids']['list']['The Wartorn Palace']
+            self.wars = memberdata['globalData'].get('wars', 0)
         else:
             self.playtime = None
             self.total_guild_raids = None
@@ -819,9 +864,10 @@ class APIMember:
             self.tcc_completions = None
             self.tna_completions = None
             self.wtp_completions = None
+            self.wars = None
         
-        if not memberdata['restrictions']['weekly_access']:
-            self.weekly = 1 if memberdata['weekly']['completed'] else 0
+        if not memberdata['restrictions']['guild_high_ranked_access']:
+            self.weekly = memberdata['weekly']['completed']
             self.weekly_streak = memberdata['weekly']['streak']
         else:
             self.weekly = None
@@ -829,19 +875,47 @@ class APIMember:
         
         self.contributed = memberdata['contributed']
         self.contribution_rank = memberdata['contributionRank']
-        self.joined_guild = int(datetime.datetime.fromisoformat(memberdata['joined'].replace("Z", "+00:00")).timestamp())
-        self.left_guild = 0
+        self.joined_guild = datetime.datetime.fromisoformat(memberdata['joined'].replace("Z", "+00:00"))
+        self.left_guild = False
 
     def update_member_database(self):
-        db.update_members(self.uuid, self.username, self.guild_rank, self.last_online, self.playtime, self.weekly, self.weekly_streak, self.contributed, self.contribution_rank, self.joined_guild, self.left_guild, self.total_guild_raids)
+        members_db.update(
+            'uuid',
+            self.uuid,
+            columns={
+                'username': self.username,
+                'guild_rank': self.guild_rank,
+                'last_seen': self.last_online,
+                'playtime': self.playtime,
+                'weekly': self.weekly,
+                'weekly_streak': self.weekly_streak,
+                'contributed': self.contributed,
+                'contribution_rank': self.contribution_rank,
+                'joined_guild': self.joined_guild,
+                'left_guild': self.left_guild,
+                'total_guild_raids': self.total_guild_raids,
+                'wars': self.wars
+            })
 
     def update_member_guild_raids(self):
-        db.update_member_guild_raids(self.uuid, self.total_guild_raids, self.notg_completions, self.nol_completions, self.tcc_completions, self.tna_completions, self.wtp_completions, self.aspects, self.next_aspect)
+        member_guild_raids_db.update(
+            'uuid',
+            self.uuid,
+            columns={
+                'total': self.total_guild_raids,
+                'notg': self.notg_completions,
+                'nol': self.nol_completions,
+                'tcc': self.tcc_completions,
+                'tna': self.tna_completions,
+                'wtp': self.wtp_completions,
+            })
 
 
 
 def get_completed_graids(member: APIMember):
-    prev_graids_result = db.fetch_member_guild_raids(member.uuid)
+    prev_graids_result = member_guild_raids_db.fetchone('uuid', member.uuid)
+    if prev_graids_result is None:
+        prev_graids_result = {raid: 0 for raid in ['notg', 'nol', 'tcc', 'tna', 'wtp']}
     prev_graids: list[int] = [prev_graids_result[raid] for raid in ['notg', 'nol', 'tcc', 'tna', 'wtp']]
     current_graids_result: list[int | None] = [member.notg_completions, member.nol_completions, member.tcc_completions, member.tna_completions, member.wtp_completions].copy()
     current_graids: list[int] = []
@@ -853,14 +927,20 @@ def get_completed_graids(member: APIMember):
     completed_graids = [current_graid - prev_graids[i] for i, current_graid in enumerate(current_graids)]
 
     new_aspects = sum(completed_graids)
-    new_aspects += prev_graids_result["next_aspect"]
+    new_aspects += prev_graids_result["next_aspect"] + 2 * prev_graids_result['aspects']
 
     aspect_to_carry_over = new_aspects % 2 #Amount of raids to complete for next aspect reward
 
     aspects_to_reward = new_aspects // 2
 
-    db.update_member_guild_raids(member.uuid, aspects=aspects_to_reward, next_aspect=aspect_to_carry_over)
-
+    member_guild_raids_db.update(
+        'uuid',
+        member.uuid,
+        columns={
+            'aspects': aspects_to_reward,
+            'next_aspect': aspect_to_carry_over
+        }
+    )
 
     completed_graids_dict = {
         'notg': completed_graids[0],
@@ -879,7 +959,7 @@ def get_completed_graids(member: APIMember):
     return completed_graids_dict
 
 def mention_user(user_uuid: str, guild: discord.Guild) -> str:
-    playerdata = db.fetch_member(user_uuid)
+    playerdata = members_db.fetchone('uuid', user_uuid)
     if not playerdata is None:
         username: str = playerdata['username']
         name = guild.get_member_named(username) if not guild is None else None
@@ -891,7 +971,7 @@ def mention_user(user_uuid: str, guild: discord.Guild) -> str:
 
 
 def get_player_username(player_uuid: str) -> str:
-    playerdata = db.fetch_member(player_uuid)
+    playerdata = members_db.fetchone('uuid', player_uuid)
     if not playerdata is None:
         playername: str = playerdata['username']
     else:
@@ -917,15 +997,15 @@ class APIQueries(commands.Cog):
 
     @app_commands.command(name="set_graid_channel")
     async def set_channel_for_graids(self, interaction: discord.Interaction, channel:discord.TextChannel, role: discord.Role):
-        role_id = db.get_meta('api_queries_role_id')
+        role_id = meta.fetchone('key', 'api_queries_role_id')
         if not role_id is None:
-            if interaction.user.get_role(int(role_id)) is None: # type: ignore pylint: disable=line-too-long
+            if interaction.user.get_role(int(role_id['value'])) is None: # type: ignore pylint: disable=line-too-long
                 return await interaction.response.send_message(
                     content="You don't have permission to use this command"
                     )
-        db.set_meta('graid_message_channel', str(channel.id))
-        db.set_meta('guild_id', str(channel.guild))
-        db.set_meta('api_queries_role_id', str(role.id))
+        meta.update('key', 'graid_message_channel', {'value': str(channel.id)})
+        meta.update('key', 'guild_id', {'value': str(channel.guild)})
+        meta.update('key', 'api_queries_role_id', {'value': str(role.id)})
         await interaction.response.send_message(content='channel and role set!', ephemeral=True)
 
 
@@ -934,7 +1014,8 @@ class APIQueries(commands.Cog):
         data = api_handler.get_endpoint_data(api_handler.construct_guild_endpoint_url())
 
         #TODO: implement guild global data handling
-        previous_members = db.fetch_all_current_members()
+        previous_members_db_res = members_db.fetchall()
+        previous_members = {memberdata['uuid']: {key: value for key, value in memberdata.items() if key != 'uuid'} for memberdata in previous_members_db_res}
         completed_graids: dict[str, dict[str, int]] = {
             "notg": {},
             "nol": {},
@@ -966,10 +1047,11 @@ class APIQueries(commands.Cog):
 
 
     async def send_discord_graids_completed_message(self, completed_graids: dict[str, dict[str, int]]):
-        channel_id = db.get_meta("graid_message_channel")
-        if channel_id is None:
+        channel_id_res = meta.fetchone('key', 'graid_message_channel')
+        if channel_id_res is None:
             print("Channel needs to be set! Use the command for setting up this module to set the channel.")
             return
+        channel_id = channel_id_res['value']
         channel = self.bot.get_channel(int(channel_id))
         if channel is None:
             await self.bot.fetch_channel(int(channel_id))
@@ -990,7 +1072,7 @@ class APIQueries(commands.Cog):
                 continue
             for player, amount in players.items():
 
-                player_description = "".join((f'{mention_user(player, guild)}\u200b | {amount}'))
+                player_description = "".join((f'{mention_user(player, guild)}ㅤ{amount} | '))
                 description = f'{description}\n{player_description}'
                 match raid:
                     case "notg":
@@ -1023,12 +1105,15 @@ class APIQueries(commands.Cog):
         aspect_embed = discord.Embed(title="Aspects", colour=discord.Color.magenta(), timestamp=datetime.datetime.now())
         aspect_reward_string = ""
         half_aspects_string = ""
-        guild_raids_from_db = db.fetch_all_member_guild_raids()
-        for member, data in guild_raids_from_db.items():
+        guild_raids_from_db = member_guild_raids_db.fetchall()
+        for data in guild_raids_from_db:
+            if data['aspects'] is None:
+                member_guild_raids_db.update('uuid', data['uuid'], columns={'aspects': 0, 'next_aspect': 0})
+                continue
             if data["aspects"] > 0:
-                aspect_reward_string = f'{aspect_reward_string}\n{mention_user(member, guild)} | {data["aspects"]}'
+                aspect_reward_string = f'{aspect_reward_string}\n{mention_user(data['uuid'], guild)} | {data["aspects"]}'
             if data["next_aspect"] > 0:
-                half_aspects_string = f'{half_aspects_string}\n{mention_user(member, guild)}'
+                half_aspects_string = f'{half_aspects_string}\n{mention_user(data['uuid'], guild)}'
                 
 
 
@@ -1063,7 +1148,7 @@ class APIQueries(commands.Cog):
 class AspectRewardModal(discord.ui.Modal, title="Aspects rewarded in-game"):
     def __init__(self):
         super().__init__()
-        db_result = db.fetch_all_member_guild_raids()
+        db_result = {memberdata['uuid']: {key: value for key, value in memberdata.items() if key != 'uuid'} for memberdata in member_guild_raids_db.fetchall()}
         self.aspects_by_player: dict[str, int] = {member: data["aspects"] for member, data in db_result.items() if data["aspects"] > 0}
         self.create_modal_items()
 
@@ -1093,7 +1178,7 @@ class AspectRewardModal(discord.ui.Modal, title="Aspects rewarded in-game"):
         for item in self.walk_children():
             if isinstance(item, ui.CheckboxGroup):
                 for player in item.values:
-                    db.update_member_guild_raids(player, aspects=0)
+                    member_guild_raids_db.update('uuid', player, columns={'aspects': 0})
                     reset_players.append(player)
         if len(reset_players) > 0:
             message = f"reset aspects for {', '.join(map(str,(mention_user(player, guild) for player in reset_players)))}"
@@ -1115,10 +1200,10 @@ class AspectRewardModal(discord.ui.Modal, title="Aspects rewarded in-game"):
 
 
 def main(global_bot):
-    global api_handler, db, api_queries
+    global api_handler, api_queries # pylint: disable=global-variable-undefined
     api_handler = APIHandler()
-    db = DataBaseHandler()
     api_queries = APIQueries(global_bot)
+    init_database()
 
     
 
