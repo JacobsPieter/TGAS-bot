@@ -74,7 +74,6 @@ class Table(Database):
 
         table_creation_text = f"{creation_text} (\n    {",\n    ".join(keys)}\n)"
 
-        print(table_creation_text)
         self.cursor.execute(table_creation_text)
         
         return self

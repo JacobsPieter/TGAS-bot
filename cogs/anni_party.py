@@ -44,7 +44,7 @@ from enum import Enum
 from dotenv import load_dotenv
 
 import discord
-from discord.ext import commands
+from discord.ext import tasks, commands
 from discord import app_commands
 
 
@@ -427,7 +427,7 @@ async def update_live_message(guild: discord.Guild):
     """
     channel_meta_id = get_meta("channel_id")
     if channel_meta_id is None:
-        print('Set a channel!')
+        print('Please set a channel!')
         return
     channel_id: int = int(channel_meta_id)
     channel = guild.get_channel(channel_id)
@@ -458,7 +458,7 @@ class AnniView(discord.ui.View):
         super().__init__(timeout=None)
 
     @discord.ui.button(
-        label="Signup",
+        label="Sign up",
         style=discord.ButtonStyle.success,
         custom_id="anni:signup",
     )
@@ -471,10 +471,43 @@ class AnniView(discord.ui.View):
             button (discord.ui.Button): The button that was clicked
         """
         await interaction.response.send_message(
-            content='please sign up here',
+            content='ㅤ',
             view=PersonalSignupView(),
+            ephemeral=True,
+            )
+
+    @discord.ui.button(
+        label="Leave",
+        style=discord.ButtonStyle.danger,
+        custom_id="anni:leave",
+    )
+    async def leave_button(self, interaction: discord.Interaction, button: discord.ui.Button): #pylint: disable=unused-argument
+        """
+        Handles the leave button click event.
+
+        Args:
+            interaction (discord.Interaction): The interaction that triggered the button
+            button (discord.ui.Button): The button that was clicked
+        """
+        cursor.execute(
+            """
+            DELETE FROM signups
+            WHERE user_id = ?
+            AND anni_id = ?
+            """, (interaction.user.id, get_current_anni_id())
+            )
+        
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(content='An error occured', ephemeral=True)
+            return
+        await update_live_message(guild)
+
+        await interaction.response.send_message(
+            content='You have been removed from the party',
             ephemeral=True
             )
+
 
 class BuildSubmitModal(discord.ui.Modal, title='Submit your build'):
     """
@@ -496,7 +529,7 @@ class BuildSubmitModal(discord.ui.Modal, title='Submit your build'):
             interaction (discord.Interaction): The interaction that submitted the modal
         """
         self.__parsed_build = self.weapon.value.strip(), self.archetype.value.strip()
-        await interaction.response.send_message(content='Your build has been registered', ephemeral=True) #pylint: disable=line-too-long
+        await interaction.response.send_message(content='ㅤ', ephemeral=True, delete_after=0) #pylint: disable=line-too-long
 
     def get_build(self) -> tuple[str, str]:
         """
@@ -545,7 +578,7 @@ class PersonalSignupView(discord.ui.View):
             self.sure = True
         else:
             self.sure = False
-        await interaction.response.send_message(content=f'You have been set as {'present' if self.sure else 'absent'}', ephemeral=True) #pylint: disable=line-too-long
+        await interaction.response.send_message(content=f'ㅤ', ephemeral=True, delete_after=0) #pylint: disable=line-too-long
 
     @discord.ui.select(
             options=[
@@ -571,7 +604,7 @@ class PersonalSignupView(discord.ui.View):
                 self.region = Region.NA
             case 'AS':
                 self.region = Region.AS
-        await interaction.response.send_message(content='Your region has been registered', ephemeral=True) #pylint: disable=line-too-long
+        await interaction.response.send_message(content='ㅤ', ephemeral=True, delete_after=0) #pylint: disable=line-too-long
 
 
     @discord.ui.button(
@@ -595,10 +628,10 @@ class PersonalSignupView(discord.ui.View):
         await interaction.response.send_message(content='Submitting... Please wait', ephemeral=True)
 
         if self.region == Region.NONE:
-            await interaction.followup.send(content='Please select a region before submitting', ephemeral=True) #pylint: disable=line-too-long
+            await interaction.edit_original_response(content='Please select a region before submitting') #pylint: disable=line-too-long
             return
         if self.weapon == '' or self.archetype == '':
-            await interaction.followup.send(content='Please fill in a build', ephemeral=True)
+            await interaction.edit_original_response(content='Please fill in a build')
             return
         leader_flag = False
 
@@ -620,7 +653,7 @@ class PersonalSignupView(discord.ui.View):
             ))
             conn.commit()
 
-        await interaction.followup.send('Your party application has been submitted', ephemeral=True)
+        await interaction.edit_original_response(content='Your party application has been submitted')
         await update_live_message(guild)
 
 async def start_new_event(guild: discord.Guild):
@@ -641,7 +674,7 @@ async def start_new_event(guild: discord.Guild):
 
     channel_meta_id = get_meta("channel_id")
     if channel_meta_id is None:
-        print('Set a channel!')
+        print('Please set a channel!')
         return
     channel_id: int = int(channel_meta_id)
     channel = guild.get_channel(channel_id)
@@ -713,8 +746,42 @@ async def on_ready():
 
 class AnniParty(commands.Cog):
     def __init__(self, self_bot):
-        self.bot = self_bot
+        self.bot: discord.Client = self_bot
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+
+        if get_meta("current_anni_id") is None:
+            set_current_anni_id(1)
+        
+    async def cog_load(self):
+
+        self.bot.add_view(AnniView())
+        self.bg_task.start()
+
+
+    @tasks.loop(count=1)
+    async def bg_task(self):
+
+        guild_id = get_meta("guild_id")
+        if guild_id is None:
+            print("Please set guild first!")
+            return
+
+        guild_id = int(guild_id)
+
+        guild = self.bot.get_guild(guild_id)
+
+        if guild is None:
+            try:
+                guild = await self.bot.fetch_guild(guild_id)
+            except discord.NotFound:
+                print("Guild not found / bot removed")
+                return
+
+        await update_live_message(guild)
     
+
     @app_commands.command(name='setup_anni_parties',
         description='Used to configure the annihilation parties module of the mod.'
         )
@@ -727,6 +794,7 @@ class AnniParty(commands.Cog):
             channel (discord.TextChannel): The channel to set up for parties
         """
         set_meta('channel_id', str(channel.id))
+        set_meta('guild_id', str(interaction.guild_id))
         await interaction.response.send_message(content='channel set!', ephemeral=True)
     
     @commands.Cog.listener()
@@ -766,7 +834,8 @@ class AnniParty(commands.Cog):
         await start_new_event(guild)
 
 async def setup(global_bot):
-    await global_bot.add_cog(AnniParty(bot))
+    print('setup called')
+    await global_bot.add_cog(AnniParty(global_bot))
 
 
 
