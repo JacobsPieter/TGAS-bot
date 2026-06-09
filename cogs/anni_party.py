@@ -425,7 +425,11 @@ async def update_live_message(guild: discord.Guild):
     Args:
         guild (discord.Guild): The guild to update the message for
     """
-    channel_id: int = int(get_meta("channel_id")) #type: ignore
+    channel_meta_id = get_meta("channel_id")
+    if channel_meta_id is None:
+        print('Set a channel!')
+        return
+    channel_id: int = int(channel_meta_id)
     channel = guild.get_channel(channel_id)
     if channel is None:
         return
@@ -635,7 +639,11 @@ async def start_new_event(guild: discord.Guild):
         cursor.execute("DELETE FROM meta WHERE key = ?", ("live_message_id",))
         conn.commit()
 
-    channel_id: int = int(get_meta("channel_id")) #type: ignore
+    channel_meta_id = get_meta("channel_id")
+    if channel_meta_id is None:
+        print('Set a channel!')
+        return
+    channel_id: int = int(channel_meta_id)
     channel = guild.get_channel(channel_id)
     if channel is None:
         return
