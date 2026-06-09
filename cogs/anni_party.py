@@ -411,11 +411,6 @@ async def manual_start_anni(interaction: discord.Interaction):
         interaction (discord.Interaction): The interaction that triggered the command
     """
     await interaction.response.defer()
-    if interaction.user.get_role(int(get_meta('anni_permissions_role_id'))) is None:  #type: ignore
-        return interaction.response.send_message(
-            "You don't have permission to send this command",
-            ephemeral=True
-            )
     guild = interaction.guild
     if guild is None:
         await interaction.followup.send(content="apparently the discord server you are sending this from doesn't exist, please don't report. I don't want to deal with this") #pylint: disable=line-too-long
@@ -660,24 +655,16 @@ async def start_new_event(guild: discord.Guild):
         name='setup_anni_parties',
         description='Used to configure the annihilation parties module of the mod.'
         )
-async def setup_anni_parties(interaction: discord.Interaction, channel:discord.TextChannel, role: discord.Role): # pylint: disable=unused-argument,disable=line-too-long
+async def setup_anni_parties(interaction: discord.Interaction, channel:discord.TextChannel): # pylint: disable=line-too-long
     """
     Discord command to set up the Annihilation parties system for a specific channel.
 
     Args:
         interaction (discord.Interaction): The interaction that triggered the command
         channel (discord.TextChannel): The channel to set up for parties
-        role (discord.Role): The role needed for the commands to run for this module
     """
-    role_id = get_meta('anni_permissions_role_id')
-    if not role_id is None:
-        if interaction.user.get_role(int(role_id)) is None: # type: ignore pylint: disable=line-too-long
-            return await interaction.response.send_message(
-                content="You don't have permission to use this command"
-                )
     set_meta('channel_id', str(channel.id))
-    set_meta('anni_permissions_role_id', str(role.id))
-    await interaction.response.send_message(content='channel and role set!', ephemeral=True)
+    await interaction.response.send_message(content='channel set!', ephemeral=True)
 
 @bot.event
 async def on_message(message: discord.Message):
@@ -723,24 +710,16 @@ class AnniParty(commands.Cog):
     @app_commands.command(name='setup_anni_parties',
         description='Used to configure the annihilation parties module of the mod.'
         )
-    async def setup_anni_parties(self, interaction: discord.Interaction, channel:discord.TextChannel, role: discord.Role): # pylint: disable=unused-argument,disable=line-too-long
+    async def setup_anni_parties(self, interaction: discord.Interaction, channel:discord.TextChannel): # pylint: disable=unused-argument,disable=line-too-long
         """
         Discord command to set up the Annihilation parties system for a specific channel.
 
         Args:
             interaction (discord.Interaction): The interaction that triggered the command
             channel (discord.TextChannel): The channel to set up for parties
-            role (discord.Role): The role needed for the commands to run for this module
         """
-        role_id = get_meta('anni_permissions_role_id')
-        if not role_id is None:
-            if interaction.user.get_role(int(role_id)) is None: # type: ignore pylint: disable=line-too-long
-                return await interaction.response.send_message(
-                    content="You don't have permission to use this command"
-                    )
         set_meta('channel_id', str(channel.id))
-        set_meta('anni_permissions_role_id', str(role.id))
-        await interaction.response.send_message(content='channel and role set!', ephemeral=True)
+        await interaction.response.send_message(content='channel set!', ephemeral=True)
     
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -771,11 +750,6 @@ class AnniParty(commands.Cog):
             interaction (discord.Interaction): The interaction that triggered the command
         """
         await interaction.response.defer()
-        if interaction.user.get_role(int(get_meta('anni_permissions_role_id'))) is None:  #type: ignore
-            return interaction.response.send_message(
-                "You don't have permission to send this command",
-                ephemeral=True
-                )
         guild = interaction.guild
         if guild is None:
             await interaction.followup.send(content="apparently the discord server you are sending this from doesn't exist, please don't report. I don't want to deal with this") #pylint: disable=line-too-long
