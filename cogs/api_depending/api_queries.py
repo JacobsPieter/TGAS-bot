@@ -66,6 +66,8 @@ class APIHandler:
             json.dump(self.get_endpoint(url).json(), file)
 
 
+
+
 def init_database(database_path: str = ".\\persistent_data\\guild_api_database.db"):
     global meta, members_db, member_guild_raids_db # pylint: disable=global-variable-undefined
 
@@ -118,11 +120,19 @@ class APIMember:
 
         if not memberdata['lastJoin'] is None:
             self.last_online = datetime.datetime.fromisoformat(memberdata['lastJoin'].replace("Z", "+00:00"))
+            self.last_online = datetime.datetime.fromisoformat(memberdata['lastJoin'].replace("Z", "+00:00"))
         else:
             self.last_online = 0
         
         if not memberdata['restrictions']['main_access']:
             self.playtime = memberdata['globalData']['playtime']
+            self.total_guild_raids = memberdata['globalData']['currentGuildRaids']['total']
+            self.notg_completions = memberdata['globalData']['currentGuildRaids']['list']['Nest of the Grootslangs']
+            self.nol_completions = memberdata['globalData']['currentGuildRaids']['list']["Orphion's Nexus of Light"]
+            self.tcc_completions = memberdata['globalData']['currentGuildRaids']['list']['The Canyon Colossus']
+            self.tna_completions = memberdata['globalData']['currentGuildRaids']['list']['The Nameless Anomaly']
+            self.wtp_completions = memberdata['globalData']['currentGuildRaids']['list']['The Wartorn Palace']
+            self.wars = memberdata['globalData'].get('wars', 0)
             self.total_guild_raids = memberdata['globalData']['currentGuildRaids']['total']
             self.notg_completions = memberdata['globalData']['currentGuildRaids']['list']['Nest of the Grootslangs']
             self.nol_completions = memberdata['globalData']['currentGuildRaids']['list']["Orphion's Nexus of Light"]
@@ -139,7 +149,10 @@ class APIMember:
             self.tna_completions = None
             self.wtp_completions = None
             self.wars = None
+            self.wars = None
         
+        if not memberdata['restrictions']['guild_high_ranked_access']:
+            self.weekly = memberdata['weekly']['completed']
         if not memberdata['restrictions']['guild_high_ranked_access']:
             self.weekly = memberdata['weekly']['completed']
             self.weekly_streak = memberdata['weekly']['streak']
@@ -151,8 +164,27 @@ class APIMember:
         self.contribution_rank = memberdata['contributionRank']
         self.joined_guild = datetime.datetime.fromisoformat(memberdata['joined'].replace("Z", "+00:00"))
         self.left_guild = False
+        self.joined_guild = datetime.datetime.fromisoformat(memberdata['joined'].replace("Z", "+00:00"))
+        self.left_guild = False
 
     def update_member_database(self):
+        members_db.update(
+            'uuid',
+            self.uuid,
+            columns={
+                'username': self.username,
+                'guild_rank': self.guild_rank,
+                'last_seen': self.last_online,
+                'playtime': self.playtime,
+                'weekly': self.weekly,
+                'weekly_streak': self.weekly_streak,
+                'contributed': self.contributed,
+                'contribution_rank': self.contribution_rank,
+                'joined_guild': self.joined_guild,
+                'left_guild': self.left_guild,
+                'total_guild_raids': self.total_guild_raids,
+                'wars': self.wars
+            })
         members_db.update(
             'uuid',
             self.uuid,
@@ -183,10 +215,24 @@ class APIMember:
                 'tna': self.tna_completions,
                 'wtp': self.wtp_completions,
             })
+        member_guild_raids_db.update(
+            'uuid',
+            self.uuid,
+            columns={
+                'total': self.total_guild_raids,
+                'notg': self.notg_completions,
+                'nol': self.nol_completions,
+                'tcc': self.tcc_completions,
+                'tna': self.tna_completions,
+                'wtp': self.wtp_completions,
+            })
 
 
 
 def get_completed_graids(member: APIMember):
+    prev_graids_result = member_guild_raids_db.fetchone('uuid', member.uuid)
+    if prev_graids_result is None:
+        prev_graids_result = {raid: 0 for raid in ['notg', 'nol', 'tcc', 'tna', 'wtp']}
     prev_graids_result = member_guild_raids_db.fetchone('uuid', member.uuid)
     if prev_graids_result is None:
         prev_graids_result = {raid: 0 for raid in ['notg', 'nol', 'tcc', 'tna', 'wtp']}
@@ -207,6 +253,14 @@ def get_completed_graids(member: APIMember):
 
     aspects_to_reward = new_aspects // 2
 
+    member_guild_raids_db.update(
+        'uuid',
+        member.uuid,
+        columns={
+            'aspects': aspects_to_reward,
+            'next_aspect': aspect_to_carry_over
+        }
+    )
     member_guild_raids_db.update(
         'uuid',
         member.uuid,
