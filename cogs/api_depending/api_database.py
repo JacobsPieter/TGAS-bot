@@ -152,10 +152,12 @@ class TrackingTable(Table):
         self.cursor.execute(query)
 
         row = self.cursor.fetchone()
+        try:
+            fetched_list = {column_name: row[column_name] for column_name in row.keys()}
 
-        fetched_list = {column_name: row[column_name] for column_name in row.keys()}
-
-        return fetched_list
+            return fetched_list
+        except:
+            return None
     
 
     def fetchlastcolumns(self, columns: list[str]):
@@ -218,6 +220,12 @@ class TrackingTable(Table):
         db_columns = self.convert_db_input_columns(columns)
 
         old_values = self.fetchlast()
+        if old_values is None:
+            query = (f"INSERT INTO {self.name} (\n{", ".join(db_columns.keys())}\n) VALUES (\n:{", :".join(db_columns.keys())}\n)")
+            self.cursor.execute(query, db_columns)
+
+            self.conn.commit()
+            return
 
         new_values = {}
         for key, value in old_values.items():
