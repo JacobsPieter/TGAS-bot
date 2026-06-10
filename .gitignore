@@ -13,3 +13,8 @@ testing
 
 TODO.md
 api_database.py
+
+main.spec
+
+build
+dist
