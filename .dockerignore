@@ -9,4 +9,4 @@ venv/
 *.json
 *.png
 .vscode
-persistent_data
+persistent_data/
