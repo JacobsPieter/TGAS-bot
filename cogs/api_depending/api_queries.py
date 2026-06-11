@@ -80,7 +80,8 @@ def init_database(database_path: str = ".\\persistent_data\\guild_api_database.d
             'joined_guild': datetime.datetime.now(),
             'left_guild': bool(),
             'total_guild_raids': int(),
-            'wars': int()
+            'wars': int(),
+            'requested_tome_received': bool()
         })
     
     member_guild_raids_db = db.UpdatingTable('member_guild_raids', p)
@@ -101,7 +102,7 @@ def init_database(database_path: str = ".\\persistent_data\\guild_api_database.d
     tome_requested_db = db.TrackingTable('tome_requested', p)
     tome_requested_db.create(
         columns={
-            'uuid': str(),
+            'uuid': str()
             }
         )
 
@@ -257,7 +258,7 @@ class APIQueries(commands.Cog):
 
 
     async def start_loop(self):
-        await self.fetch_guild_endpoint.start()
+        self.fetch_guild_endpoint.start()
         print("Loop for querying the WynnAPI has been started.")
 
     async def cog_load(self) -> None:
@@ -287,7 +288,7 @@ class APIQueries(commands.Cog):
         
         self.bot.add_view(RequestedTomesView(guild))
 
-        await update_tome_live_message(guild)
+        self.tome_update_looping.start()
 
 
     @app_commands.command(name="set_graid_channel")
@@ -319,6 +320,10 @@ class APIQueries(commands.Cog):
                 if member.total_guild_raids is None:
                     continue
                 member.update_member_database()
+    
+    @fetch_guild_endpoint.before_loop
+    async def fetch_guild_endpoint_before_loop(self):
+        await self.bot.wait_until_ready()
 
     @app_commands.command(name="set_aspects_rewarded")
     async def reward_aspects(self, interaction: discord.Interaction):
@@ -341,7 +346,29 @@ class APIQueries(commands.Cog):
             return
         meta.update('key', 'guild_id', columns={'value': guild.id})
         meta.update('key', 'tome_requests_channel_id', columns={'value': channel.id})
+        if not self.tome_update_looping.is_running():
+            self.tome_update_looping.start()
+    
+    @tasks.loop(minutes=2)
+    async def tome_update_looping(self):
+        guild_id_db_res = meta.fetchone('key','guild_id')
+        if guild_id_db_res is None:
+            print('set a guild!')
+            return
+        guild = self.bot.get_guild(int(guild_id_db_res['value']))
+        if guild is None:
+            print('invalid guild')
+            return
         await update_tome_live_message(guild)
+
+    @tome_update_looping.before_loop
+    async def tome_update_looping_before_loop(self):
+        await self.bot.wait_until_ready()
+    
+    @app_commands.command(name='reward_tomes')
+    async def reward_tomes(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(TomeRewardModal())
+
 
 
 async def handle_graids(cog: APIQueries, data):
@@ -498,10 +525,9 @@ async def handle_tome_requests(interaction: discord.Interaction):
     if isinstance(interaction.user, discord.Member):
         username = interaction.user.nick
     else:
-        print('here!')
         return
     membersdata = members_db.fetchall_conditional(f'username = \'{username}\'')
-    if membersdata == []:
+    if membersdata is None:
         await interaction.followup.send(content="You don't seem to be in the guild.\nIf you are, this is an error, please report\nIf you aren't in the guild, please ignore", ephemeral=True)
         return
     memberdata = membersdata[0]
@@ -517,7 +543,7 @@ async def handle_tome_requests(interaction: discord.Interaction):
     if time_elapsed_needed is None:
         await interaction.followup.send(content='Please ask a moderator to set the minimum interval needed to request a tome again', ephemeral=True)
         return
-    if datetime.datetime.now() - last_requested < datetime.timedelta(days=int(time_elapsed_needed['value'])):
+    if datetime.datetime.now() - last_requested < datetime.timedelta(minutes=int(time_elapsed_needed['value'])):
         await interaction.followup.send(content=f'Please wait {time_elapsed_needed['value']} days since your last request before requesting a tome again', ephemeral=True)
         return
     if not memberdata['weekly']:
@@ -534,30 +560,43 @@ async def handle_tome_requests(interaction: discord.Interaction):
     if interaction.guild is None:
         await interaction.followup.send(content='Please don\'t use this outside a server')
         return
+    members_db.update('uuid', uuid, columns={'requested_tome_received': 0})
+    guild = interaction.guild
+    if guild is None:
+        return await interaction.followup.send(content="An error has occured, try again later", ephemeral=True)
+    await update_tome_live_message(guild)
     await interaction.followup.send(content="Your tome has been requested, it will be given to you shortly", ephemeral=True)
-    await update_tome_live_message(interaction.guild)
 
 
-def create_cooldown_string(guild: discord.Guild) -> str:
+def create_tome_cooldown_string(guild: discord.Guild) -> str:
     try:
-        requests = tome_requested_db.fetchall()
+        requested = tome_requested_db.fetchall()
     except AttributeError as e:
-        requests = []
+        requested = []
         print(e)
-    if requests == []:
+    if requested == []:
         return 'No one currently on cooldown.'
     cooldown = meta.fetchone('key', 'tome_request_time_interval')
     if cooldown is None:
         return 'error while constructing cooldown list'
     on_cooldown_str = ''
-    for memberdict in requests:
-        if datetime.datetime.now() - datetime.datetime.fromtimestamp(memberdict['timestamp']) > datetime.timedelta(days=int(cooldown['value'])):
+    for memberdict in requested:
+        if (datetime.datetime.now() - datetime.datetime.fromtimestamp(memberdict['timestamp'])).total_seconds() > datetime.timedelta(minutes=int(cooldown['value'])).total_seconds():
             continue
-        timestamp_value = int(memberdict['timestamp']) + int(datetime.timedelta(days=int(cooldown['value'])).total_seconds())
+        timestamp_value = int(memberdict['timestamp']) + int(datetime.timedelta(minutes=int(cooldown['value'])).total_seconds())
         on_cooldown_str = '\n'.join((on_cooldown_str, f'{mention_user(memberdict['uuid'], guild)} ---------- <t:{timestamp_value}> | <t:{timestamp_value}:R>'))
     if on_cooldown_str == '':
         return 'No one currently on cooldown.'
     return f'Person ---------- Date for next possible request | relative time\n{on_cooldown_str}'
+
+def create_tome_to_still_hand_out_string(guild: discord.Guild) -> str:
+    db_res = members_db.fetchall_conditional('requested_tome_received = 0')
+    if db_res == []:
+        return ''
+    return_str = ''
+    for member in db_res:
+        return_str = '\n- '.join((return_str, mention_user(member['uuid'], guild)))
+    return f'### People who have requested a tome but not yet received one\n-# You will receive one as soon as possible\n-# Your cooldown has already started{return_str}'
 
 
 class RequestedTomesView(discord.ui.LayoutView):
@@ -608,22 +647,20 @@ class RequestedTomesView(discord.ui.LayoutView):
             visible = True,
             ))
 
-        self.add_item(discord.ui.TextDisplay(content='# People currently on cooldown'))
+        self.add_item(discord.ui.TextDisplay(content='# People currently on cooldown\n-# This may take a few minutes to update'))
         self.add_item(discord.ui.Container(
             discord.ui.TextDisplay(
-                content=create_cooldown_string(guild)
+                content=create_tome_cooldown_string(guild)
                 )
             ))
-        self.add_item(discord.ui.Container(
-            discord.ui.TextDisplay(
-                content=(
-                    '### People who have requested a tome but not yet received one\n'
-                    '-# You will receive one as soon as possible\n'
-                    '-# Your cooldown has already started\n'
-                    'Jacobs0811'
+        
+        tomes_to_reward = create_tome_to_still_hand_out_string(guild)
+        if not tomes_to_reward == '':
+            self.add_item(discord.ui.Container(
+                discord.ui.TextDisplay(
+                    content=tomes_to_reward
                     )
-                )
-            ))
+                ))
         
         class RequestButton(discord.ui.Button):
             async def callback(self, interaction: discord.Interaction) -> Any:
@@ -665,6 +702,63 @@ async def update_tome_live_message(guild: discord.Guild):
     except discord.NotFound:
         message = await channel.send(view=RequestedTomesView(guild))
         meta.update('key', 'live_tome_message_id', columns={"value": str(message.id)})
+
+
+class TomeRewardModal(discord.ui.Modal, title="Tomes rewarded in-game"):
+    def __init__(self):
+        super().__init__()
+        self.db_result = members_db.fetchall_conditional('requested_tome_received = 0')
+        if self.db_result == []:
+            self.add_item(discord.ui.TextDisplay(content='All tomes have been rewarded!'))
+        else:
+            self.to_reward_list = [row['uuid'] for row in self.db_result]
+            self.to_reward_set = set()
+            self.to_reward: dict[str, int] = {}
+            for row in self.to_reward_list:
+                if row in self.to_reward_set:
+                    self.to_reward[row] += 1
+                    continue
+                self.to_reward[row] = 1
+            self.create_modal_items()
+
+    def create_modal_items(self):
+        options = []
+        for player, amount in self.to_reward.items():
+            to_add = discord.CheckboxGroupOption(label=f"{amount} tomes rewarded to {get_player_username(player)}", value=player)
+            options.append(to_add)
+            if len(options) >= 10:
+                add_option_group = ui.Label(text="ㅤ", component=ui.CheckboxGroup(options=options, max_values=len(options), min_values=0, required=False))
+                self.add_item(add_option_group)
+                options = options[10:]
+        if len(options) > 0:
+            add_option_group = ui.Label(text="ㅤ", component=ui.CheckboxGroup(options=options, max_values=len(options), min_values=0, required=False))
+            self.add_item(add_option_group)
+
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        message_send = await interaction.response.defer(ephemeral=True)
+        reset_players = []
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message("please send this from a guild", ephemeral=True)
+            return
+        for item in self.walk_children():
+            if isinstance(item, ui.CheckboxGroup):
+                for player in item.values:
+                    members_db.update('uuid', player, columns={'requested_tome_received': 1})
+                    reset_players.append(player)
+        if len(reset_players) > 0:
+            await update_tome_live_message(guild)
+            message = f"reset tomes to reward for {', '.join(map(str,(mention_user(player, guild) for player in reset_players)))}"
+            await interaction.followup.send(message, ephemeral=True)
+        else:
+            message = "ㅤ"
+            await interaction.followup.send(message, ephemeral=True)
+            if message_send is None:
+                return
+            await interaction.followup.delete_message(message_send.id)
+
+
 
 
 
