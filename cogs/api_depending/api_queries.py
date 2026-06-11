@@ -543,7 +543,7 @@ async def handle_tome_requests(interaction: discord.Interaction):
     if time_elapsed_needed is None:
         await interaction.followup.send(content='Please ask a moderator to set the minimum interval needed to request a tome again', ephemeral=True)
         return
-    if datetime.datetime.now() - last_requested < datetime.timedelta(minutes=int(time_elapsed_needed['value'])):
+    if datetime.datetime.now() - last_requested < datetime.timedelta(days=int(time_elapsed_needed['value'])):
         await interaction.followup.send(content=f'Please wait {time_elapsed_needed['value']} days since your last request before requesting a tome again', ephemeral=True)
         return
     if not memberdata['weekly']:
@@ -581,9 +581,9 @@ def create_tome_cooldown_string(guild: discord.Guild) -> str:
         return 'error while constructing cooldown list'
     on_cooldown_str = ''
     for memberdict in requested:
-        if (datetime.datetime.now() - datetime.datetime.fromtimestamp(memberdict['timestamp'])).total_seconds() > datetime.timedelta(minutes=int(cooldown['value'])).total_seconds():
+        if (datetime.datetime.now() - datetime.datetime.fromtimestamp(memberdict['timestamp'])).total_seconds() > datetime.timedelta(days=int(cooldown['value'])).total_seconds():
             continue
-        timestamp_value = int(memberdict['timestamp']) + int(datetime.timedelta(minutes=int(cooldown['value'])).total_seconds())
+        timestamp_value = int(memberdict['timestamp']) + int(datetime.timedelta(days=int(cooldown['value'])).total_seconds())
         on_cooldown_str = '\n'.join((on_cooldown_str, f'{mention_user(memberdict['uuid'], guild)} ---------- <t:{timestamp_value}> | <t:{timestamp_value}:R>'))
     if on_cooldown_str == '':
         return 'No one currently on cooldown.'
