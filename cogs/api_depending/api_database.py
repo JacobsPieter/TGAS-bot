@@ -1,7 +1,7 @@
 import sqlite3
 from enum import Enum
 import datetime
-
+import threading
 
 # TODO: Sanitize all SQL queries
 
@@ -21,6 +21,8 @@ class Database:
         self.conn = sqlite3.connect(db_path)
         self.conn.row_factory = sqlite3.Row
         self.cursor = self.conn.cursor()
+        self.conn.execute("PRAGMA journal_mode=WAL;")
+        self.db_lock = threading.Lock()
 
     class DBKeyType(Enum):
         STR = "TEXT"
@@ -39,6 +41,8 @@ class Database:
             return input_field.timestamp(), self.DBKeyType.FLOAT
         elif isinstance(input_field, bool):
             return 1 if input_field else 0, self.DBKeyType.INT
+        elif input_field is None:
+            raise TypeError('Input cannot be Nonetype')
         else:
             raise TypeError()
     
@@ -152,12 +156,13 @@ class TrackingTable(Table):
         self.cursor.execute(query)
 
         row = self.cursor.fetchone()
-        try:
-            fetched_list = {column_name: row[column_name] for column_name in row.keys()}
-
-            return fetched_list
-        except:
+        if row is None:
             return None
+        
+        fetched_list = {column_name: row[column_name] for column_name in row.keys()}
+
+        return fetched_list
+
     
 
     def fetchlastcolumns(self, columns: list[str]):
@@ -166,6 +171,9 @@ class TrackingTable(Table):
         self.cursor.execute(query)
 
         row = self.cursor.fetchone()
+        
+        if row is None:
+            return None
 
         fetched_list = {column_name: row[column_name] for column_name in row.keys()}
 
@@ -178,6 +186,9 @@ class TrackingTable(Table):
         self.cursor.execute(query)
 
         row = self.cursor.fetchone()
+
+        if row is None:
+            return None
 
         fetched_list = {column_name: row[column_name] for column_name in row.keys()}
 
@@ -209,9 +220,11 @@ class TrackingTable(Table):
 
         query = (f"INSERT INTO {self.name} (\n{", ".join(db_columns.keys())}\n) VALUES (\n:{", :".join(db_columns.keys())}\n)")
 
-        self.cursor.execute(query, db_columns)
+        with self.db_lock:
 
-        self.conn.commit()
+            self.cursor.execute(query, db_columns)
+
+            self.conn.commit()
 
 
     def updatecolumns(self, columns: dict[str, Database.DBInputType]):
@@ -222,9 +235,10 @@ class TrackingTable(Table):
         old_values = self.fetchlast()
         if old_values is None:
             query = (f"INSERT INTO {self.name} (\n{", ".join(db_columns.keys())}\n) VALUES (\n:{", :".join(db_columns.keys())}\n)")
-            self.cursor.execute(query, db_columns)
+            with self.db_lock:
+                self.cursor.execute(query, db_columns)
 
-            self.conn.commit()
+                self.conn.commit()
             return
 
         new_values = {}
@@ -238,9 +252,10 @@ class TrackingTable(Table):
         
         query = (f"INSERT INTO {self.name} (\n{", ".join(new_values.keys())}\n) VALUES (\n:{", :".join(new_values.keys())}\n)")
 
-        self.cursor.execute(query, new_values)
+        with self.db_lock:
+            self.cursor.execute(query, new_values)
 
-        self.conn.commit()
+            self.conn.commit()
         
 
 
@@ -318,9 +333,10 @@ class UpdatingTable(Table):
         if prev_data is None:
             query = (f"INSERT INTO {self.name} (\n{", ".join(db_columns.keys())}\n) VALUES (\n:{", :".join(db_columns.keys())}\n)")
 
-            self.cursor.execute(query, db_columns)
+            with self.db_lock:
+                self.cursor.execute(query, db_columns)
 
-            self.conn.commit()
+                self.conn.commit()
             return
         
         new_values = {}
@@ -331,10 +347,11 @@ class UpdatingTable(Table):
                 new_values[key] = db_columns[key]
 
         query = (f"UPDATE {self.name}\nSET\n    {",\n    ".join((" = ".join((key, f":{key}")) for key in new_values if not key == primary_key_name))}\n WHERE {primary_key_name} = :{primary_key_name}")
-
-        self.cursor.execute(query, new_values)
         
-        self.conn.commit()
+        with self.db_lock:
+            self.cursor.execute(query, new_values)
+            
+            self.conn.commit()
 
 
 

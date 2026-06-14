@@ -1,9 +1,13 @@
 import os
+import math
 from enum import Enum
 import json
 import datetime
 import asyncio
 from typing import Any
+from itertools import pairwise, dropwhile
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
 import requests
 import discord
@@ -38,15 +42,25 @@ class APIHandler:
         headers = {
         "Authorization": f"Bearer {self.WYNN_API_TOKEN}"
         }
-        response = await asyncio.to_thread(requests.get, url, headers=headers, timeout=30)
+        response = await asyncio.to_thread(requests.get, url, headers=headers, timeout=10)
         
         return response
 
 
     async def get_endpoint_data(self, url: str):
-        data = await self.get_endpoint(url)
-        json_data = data.json()
-        return json_data
+        response = await self.get_endpoint(url)
+
+        if not response.ok:
+            raise ConnectionError(f"API error {response.status_code}: {response.text[:200]}")
+
+        if not response.text.strip():
+            raise ValueError("Empty response from API")
+
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise ValueError(f"Invalid JSON response: {response.text[:200]}") from exc
+
 
     async def dump_endpoint_data(self, url: str):
 
@@ -58,7 +72,7 @@ class APIHandler:
 
 
 def init_database(database_path: str = ".\\persistent_data\\guild_api_database.db"):
-    global meta, members_db, member_guild_raids_db, tome_requested_db # pylint: disable=global-variable-undefined
+    global meta, members_db, member_guild_raids_db, tome_requested_db, playtime_tracking_db # pylint: disable=global-variable-undefined
 
     p = database_path
 
@@ -105,6 +119,14 @@ def init_database(database_path: str = ".\\persistent_data\\guild_api_database.d
             'uuid': str()
             }
         )
+
+    playtime_tracking_db = db.TrackingTable('playtime', p)
+    playtime_tracking_db.create(
+        columns={
+            'uuid': str(),
+            'playtime': float()
+        }
+    )
 
 
 
@@ -270,6 +292,8 @@ class APIQueries(commands.Cog):
     @tasks.loop(count=1)
     async def bg_task(self):
 
+        self.plot_semaphore = asyncio.Semaphore(3)
+
         guild_id = meta.fetchone('key', "guild_id")
         if guild_id is None:
             print("Please set guild first!")
@@ -289,6 +313,8 @@ class APIQueries(commands.Cog):
         self.bot.add_view(RequestedTomesView(guild))
 
         self.tome_update_looping.start()
+
+        self.update_playtime_loop.start()
 
 
     @app_commands.command(name="set_graid_channel")
@@ -369,6 +395,72 @@ class APIQueries(commands.Cog):
     async def reward_tomes(self, interaction: discord.Interaction):
         await interaction.response.send_modal(TomeRewardModal())
 
+
+    @app_commands.command(name='get_user_playtime_graph')
+    async def get_user_playtime_graph(self, interaction: discord.Interaction, member: discord.Member):
+        await interaction.response.defer()
+        async with self.plot_semaphore:
+            member_to_get = member.display_name
+            member_db_res = members_db.fetchall_conditional(f'username = \'{member_to_get}\'')
+            if member_db_res is None:
+                return await interaction.followup.send(content='Please ask this for someone in the guild or check your input. I don\'t have data for non-guild members')
+            uuid = member_db_res[0]['uuid']
+            playtime_history = playtime_tracking_db.fetchall_conditional(f'uuid = \'{uuid}\' ORDER BY timestamp DESC')
+            hour_time = datetime.timedelta(hours=1).total_seconds()
+            playtime_history.sort(key=lambda r: r['timestamp'])
+            playtime_history_cleaned = [{'timestamp': snapshot['timestamp'], 'playtime': snapshot['playtime']} for snapshot in playtime_history]
+            if not playtime_history_cleaned:
+                return await interaction.followup.send("Not enough data yet.")
+
+            playtime_history_filled_in: list[dict[str, float]] = []
+            for point1, point2 in pairwise(playtime_history_cleaned):
+                if point2['timestamp'] - point1['timestamp'] >= hour_time + 60: # Giving a little bit of wiggle room
+                    for e in range(math.floor((point2['timestamp'] - point1['timestamp']) // hour_time)):
+                        playtime_history_filled_in.append(
+                            {
+                                'timestamp': point1['timestamp'] + e*hour_time,
+                                'playtime': point1['playtime']
+                            }
+                        )
+                    continue
+                playtime_history_filled_in.append(point1)
+            playtime_history_filled_in.append(playtime_history_cleaned[-1])
+            playtime_history_diffs = [{'timestamp': snapshot['timestamp'], 'playtime': snapshot['playtime'] - playtime_history_filled_in[i]['playtime']} for i, snapshot in enumerate(playtime_history_filled_in[1:], start=0)]
+
+            
+            hourly_playtime_history = [{'timestamp': datetime.datetime.fromtimestamp(snapshot['timestamp']), 'playtime': round(snapshot['playtime'], 1)} for snapshot in playtime_history_diffs]
+            indexes = [snapshot['timestamp'] for snapshot in hourly_playtime_history]
+            values = [snapshot['playtime'] for snapshot in hourly_playtime_history]
+
+            path = f".\\temp_data\\player_activity_chart_{interaction.id}.png"
+            await render_chart_async(indexes, values, width=1/(26), title="Hourly Playtime", output_path=path)
+
+            try:
+                await interaction.followup.send(file=discord.File(path))
+            except discord.NotFound:
+                return
+            finally:
+                await asyncio.to_thread(os.remove, path)
+
+
+
+    @tasks.loop(hours=2)
+    async def update_playtime_loop(self):
+        members = members_db.fetchall()
+        for member in members:
+            if member['playtime'] is None:
+                continue
+            current_tracked_playtime = playtime_tracking_db.fetchlast_conditional(f'uuid = \'{member["uuid"]}\'')
+            if current_tracked_playtime is None:
+                playtime_tracking_db.updatecolumns(columns={'uuid': member['uuid'], 'playtime': member['playtime']})
+                continue
+            if current_tracked_playtime['playtime'] == member['playtime']:
+                continue
+            playtime_tracking_db.updatecolumns(columns={'uuid': member['uuid'], 'playtime': member['playtime']})
+    
+    @update_playtime_loop.before_loop
+    async def playtime_updating_loop_before_loop(self):
+        await self.bot.wait_until_ready()
 
 
 async def handle_graids(cog: APIQueries, data):
@@ -523,7 +615,7 @@ class AspectRewardModal(discord.ui.Modal, title="Aspects rewarded in-game"):
 async def handle_tome_requests(interaction: discord.Interaction):
     #TODO: Make a command to set a tome as been rewarded
     if isinstance(interaction.user, discord.Member):
-        username = interaction.user.nick
+        username = interaction.user.display_name
     else:
         return
     membersdata = members_db.fetchall_conditional(f'username = \'{username}\'')
@@ -532,11 +624,11 @@ async def handle_tome_requests(interaction: discord.Interaction):
         return
     memberdata = membersdata[0]
     uuid = memberdata['uuid']
-    try:
-        tome_requested_db_result = tome_requested_db.fetchlast_conditional(f'uuid = \'{uuid}\'')
-    except AttributeError as e:
+    tome_requested_db_res = tome_requested_db.fetchlast_conditional(f'uuid = \'{uuid}\'')
+    if tome_requested_db_res is not None:
+        tome_requested_db_result = tome_requested_db_res 
+    else:
         tome_requested_db_result = {'timestamp': 0}
-        print(e)
     last_requested_timestamp = tome_requested_db_result['timestamp']
     last_requested = datetime.datetime.fromtimestamp(last_requested_timestamp)
     time_elapsed_needed = meta.fetchone('key','tome_request_time_interval')
@@ -759,6 +851,52 @@ class TomeRewardModal(discord.ui.Modal, title="Tomes rewarded in-game"):
             await interaction.followup.delete_message(message_send.id)
 
 
+def generate_bar_chart(x, y, width, title: str):
+    fig = Figure()
+    FigureCanvas(fig)
+
+    ax = fig.add_subplot(111)
+    ax.bar(x, y, width=width)
+
+    ax.set_title(title)
+    ax.tick_params(axis='x', labelrotation=45)
+
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    ax.text(
+        0.99, 0.01,
+        f"{timestamp}",
+        transform=ax.transAxes,
+        ha='right',
+        va='bottom',
+        fontsize=8,
+        alpha=0.7
+    )
+
+    fig.tight_layout()
+
+    return fig
+
+
+async def render_chart_async(x, y, width, title: str, output_path):
+    fig = await asyncio.to_thread(generate_bar_chart, x, y, width, title)
+
+    # save in background thread (IMPORTANT: blocking operation)
+    await asyncio.to_thread(fig.savefig, output_path, bbox_inches="tight", dpi=150)
+
+    # explicit cleanup
+    await asyncio.to_thread(fig.clf)
+    del fig
+
+    return output_path
+
+
+def skip_until_threshold(data, key, threshold):
+    if not data:
+        return []
+
+    limit = data[0][key] + threshold
+    return list(dropwhile(lambda d: d[key] < limit, data))
 
 
 

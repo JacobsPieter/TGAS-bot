@@ -17,7 +17,6 @@ def send_random_gambling_encouragement_message():
     messages = [
         'Yes, gamble!',
         'Of course you should!',
-        'gamba',
         '90% of gamblers quit before they win big'
         ]
     return rd.choice(messages)
@@ -45,7 +44,7 @@ class GamblingMessages(commands.Cog):
         if message.author == self.bot.user:
             return
 
-        encouraged_words = ['gamble', 'gamba', 'roll', 'gambling', 'gambler', 'luck']
+        encouraged_words = ['gamble', 'roll', 'gambling', 'gambler', 'luck']
         if any(encouraged_behaviour in message.content.lower() for encouraged_behaviour in encouraged_words):  # pylint: disable=line-too-long
             await message.channel.send(send_random_gambling_encouragement_message())
     
