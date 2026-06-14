@@ -406,7 +406,7 @@ class APIQueries(commands.Cog):
                 return await interaction.followup.send(content='Please ask this for someone in the guild or check your input. I don\'t have data for non-guild members')
             uuid = member_db_res[0]['uuid']
             playtime_history = playtime_tracking_db.fetchall_conditional(f'uuid = \'{uuid}\' ORDER BY timestamp DESC')
-            hour_time = datetime.timedelta(hours=1).total_seconds()
+            hour_time = datetime.timedelta(hours=2).total_seconds()
             playtime_history.sort(key=lambda r: r['timestamp'])
             playtime_history_cleaned = [{'timestamp': snapshot['timestamp'], 'playtime': snapshot['playtime']} for snapshot in playtime_history]
             if not playtime_history_cleaned:
@@ -433,7 +433,7 @@ class APIQueries(commands.Cog):
             values = [snapshot['playtime'] for snapshot in hourly_playtime_history]
 
             path = f".\\temp_data\\player_activity_chart_{interaction.id}.png"
-            await render_chart_async(indexes, values, width=1/(26), title="Hourly Playtime", output_path=path)
+            await render_chart_async(indexes, values, width=1/(13), title="Twohourly Playtime", output_path=path)
 
             try:
                 await interaction.followup.send(file=discord.File(path))
