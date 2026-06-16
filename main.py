@@ -40,7 +40,7 @@ class Bot(commands.Bot):
 async def load_cogs(bot):
     EXTENSIONS = [
     "cogs.anni_party",
-    "cogs.random_gambling_messages",
+    #"cogs.random_gambling_messages",
     "cogs.api_depending.api_queries"
     ]
     for ext in EXTENSIONS:

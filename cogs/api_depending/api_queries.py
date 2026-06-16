@@ -6,10 +6,14 @@ import datetime
 import asyncio
 from typing import Any
 from itertools import pairwise, dropwhile
-from matplotlib.figure import Figure
+
+import matplotlib
+matplotlib.use("Agg")
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from matplotlib.figure import Figure
 
 import requests
+
 import discord
 from discord import app_commands
 from discord.ext import tasks, commands
@@ -76,6 +80,11 @@ def init_database(database_path: str = ".\\persistent_data\\guild_api_database.d
 
     p = database_path
 
+
+    general_database_operations_object = db.Database(p)
+    general_database_operations_object.run_migrations()
+
+
     meta = db.UpdatingTable("meta", p)
     meta.create(('key', str()), {'value': str()})
 
@@ -127,6 +136,9 @@ def init_database(database_path: str = ".\\persistent_data\\guild_api_database.d
             'playtime': float()
         }
     )
+
+
+
 
 
 
@@ -317,7 +329,7 @@ class APIQueries(commands.Cog):
         self.update_playtime_loop.start()
 
 
-    @app_commands.command(name="set_graid_channel")
+    #@app_commands.command(name="set_graid_channel")
     async def set_channel_for_graids(self, interaction: discord.Interaction, channel:discord.TextChannel, role: discord.Role):
         role_id = meta.fetchone('key', 'api_queries_role_id')
         if not role_id is None:
@@ -336,7 +348,7 @@ class APIQueries(commands.Cog):
         data = await api_handler.get_endpoint_data(api_handler.construct_guild_endpoint_url())
 
         #TODO: implement guild global data handling
-        await handle_graids(self, data)
+        #await handle_graids(self, data)
 
         for rank, rank_members in data['members'].items():
             if not rank in {"owner", "chief", "strategist", "captain", "recruiter", "recruit"}: # all guild ranks, will need updating in case of update
@@ -351,7 +363,7 @@ class APIQueries(commands.Cog):
     async def fetch_guild_endpoint_before_loop(self):
         await self.bot.wait_until_ready()
 
-    @app_commands.command(name="set_aspects_rewarded")
+    #@app_commands.command(name="set_aspects_rewarded")
     async def reward_aspects(self, interaction: discord.Interaction):
         await interaction.response.send_modal(AspectRewardModal())
 
@@ -396,7 +408,7 @@ class APIQueries(commands.Cog):
         await interaction.response.send_modal(TomeRewardModal())
 
 
-    @app_commands.command(name='get_user_playtime_graph')
+    #@app_commands.command(name='get_user_playtime_graph')
     async def get_user_playtime_graph(self, interaction: discord.Interaction, member: discord.Member):
         await interaction.response.defer()
         async with self.plot_semaphore:

@@ -51,48 +51,57 @@ from discord import app_commands
 load_dotenv()
 
 # ------------------ CONFIG ------------------
-# Bot token from environment variables
-TOKEN: str = os.getenv("BOT_TOKEN")  #type: ignore
 TEAM_SIZE = 10  # Maximum players per party
 
-# ------------------ BOT SETUP ------------------
-intents = discord.Intents.default()
-intents.members = True
-intents.message_content = True  # Required for message content processing
 
-allowed_mentions = discord.AllowedMentions(users=True, roles=True)
-
-bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ------------------ DB ------------------
-conn = sqlite3.connect("persistent_data\\anni_party.db", check_same_thread=False)
-cursor = conn.cursor()
+def init_database():
+    global db_lock, conn, cursor
+    conn = sqlite3.connect("persistent_data\\anni_party.db", check_same_thread=False)
+    cursor = conn.cursor()
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS signups (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    username TEXT NOT NULL,
-    anni_id INTEGER NOT NULL,
-    region TEXT NOT NULL,
-    weapon TEXT NOT NULL,
-    archetype TEXT NOT NULL,
-    reserve INTEGER NOT NULL DEFAULT 0,
-    can_lead INTEGER NOT NULL DEFAULT 0,
-    timestamp INTEGER NOT NULL,
-    UNIQUE(user_id, anni_id)
-)
-""")
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS signups (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        username TEXT NOT NULL,
+        anni_id INTEGER NOT NULL,
+        region TEXT NOT NULL,
+        weapon TEXT NOT NULL,
+        archetype TEXT NOT NULL,
+        reserve INTEGER NOT NULL DEFAULT 0,
+        can_lead INTEGER NOT NULL DEFAULT 0,
+        guild_outsider INTEGER NOT NULL DEFAULT 0,
+        timestamp INTEGER NOT NULL,
+        UNIQUE(user_id, anni_id)
+    )
+    """)
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS meta (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-)
-""")
-conn.commit()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    )
+    """)
+    conn.commit()
 
-db_lock = asyncio.Lock()
+    db_lock = asyncio.Lock()
+
+    version = conn.execute("PRAGMA user_version").fetchone()[0]
+
+    if version < 1:
+        try:
+            conn.execute("""
+                ALTER TABLE signups
+                ADD COLUMN guild_outsider
+                INTEGER DEFAULT 0
+            """)
+        except sqlite3.OperationalError:
+            pass
+        conn.execute("PRAGMA user_version = 1")
+
+    conn.commit()
 
 def get_current_anni_id() -> int:
     """
@@ -175,7 +184,8 @@ class PartyMember:
             archetype: str,
             preferred_region: Region,
             confirmed: bool = True,
-            leader: bool = False
+            leader: bool = False,
+            guild_outsider: bool = False
             ):
         self.name = name
         self.weapon = weapon
@@ -183,6 +193,7 @@ class PartyMember:
         self.preferred_region = preferred_region
         self.confirmed = confirmed
         self.leader = leader
+        self.guild_outsider = guild_outsider
 
 class Party:
     """
@@ -248,7 +259,7 @@ async def get_signups() -> list[PartyMember]:
 
     async with db_lock:
         cursor.execute("""
-            SELECT user_id, username, region, weapon, archetype, reserve, can_lead, timestamp
+            SELECT user_id, username, region, weapon, archetype, reserve, can_lead, guild_outsider, timestamp
             FROM signups
             WHERE anni_id = ?
         """, (anni_id,))
@@ -271,7 +282,8 @@ async def get_signups() -> list[PartyMember]:
             archetype=row[4],
             preferred_region=region,
             confirmed=row[5],
-            leader=row[6]
+            leader=row[6],
+            guild_outsider=row[7]
             )
         partymembers.append(member)
 
@@ -287,7 +299,7 @@ async def get_parties() -> list[Party]:
     signups = await get_signups()
     if signups == []:
         return []
-    possible_party_members = [member for member in signups if member.confirmed]
+    possible_party_members = [member for member in signups if member.confirmed and not member.guild_outsider]
     parties: list[Party] = []
     EU_members: list[PartyMember] = [] #pylint: disable=invalid-name
     NA_members: list[PartyMember] = [] #pylint: disable=invalid-name
@@ -341,8 +353,13 @@ async def get_unsure() -> list[PartyMember]:
         list[PartyMember]: List of players with unconfirmed status
     """
     signups = await get_signups()
-    confirmation_pending = [member for member in signups if not member.confirmed]
+    confirmation_pending = [member for member in signups if not member.confirmed and not member.guild_outsider]
     return confirmation_pending
+
+async def get_outsiders() -> list[PartyMember]:
+    signups = await get_signups()
+    outsiders = [member for member in signups if member.guild_outsider]
+    return outsiders
 
 async def create_embeds(guild: discord.Guild):
     """
@@ -400,23 +417,21 @@ async def create_embeds(guild: discord.Guild):
                 unsure_string = ''.join((unsure_string, f'\n {name.mention} - {unsure.weapon} | {unsure.archetype}')) #pylint: disable=line-too-long
         unsure_list.add_field(name='', value=unsure_string)
         embeds.append(unsure_list)
+    
+    outsiders = await get_outsiders()
+    if not outsiders == []:
+        outsider_list = discord.Embed(title='People not in the guild wanting to join', colour=discord.Colour.red())
+        outsider_string = ''
+        for outsider in outsiders:
+            name = guild.get_member_named(outsider.name)
+            if name is None:
+                outsider_string = ''.join((outsider_string, f'\n {outsider.name} - {outsider.weapon} | {outsider.archetype}'))
+            else:
+                outsider_string = ''.join((outsider_string, f'\n {name.mention} - {outsider.weapon} | {outsider.archetype}')) #pylint: disable=line-too-long
+        outsider_list.add_field(name='', value=outsider_string)
+        embeds.append(outsider_list)
     return embeds
 
-@bot.tree.command(name='manual_start_anni')
-async def manual_start_anni(interaction: discord.Interaction):
-    """
-    Discord command to send a test embed and start the signup process.
-
-    Args:
-        interaction (discord.Interaction): The interaction that triggered the command
-    """
-    await interaction.response.defer()
-    guild = interaction.guild
-    if guild is None:
-        await interaction.followup.send(content="apparently the discord server you are sending this from doesn't exist, please don't report. I don't want to deal with this") #pylint: disable=line-too-long
-        return
-    await interaction.followup.send(content='started signups!', ephemeral=True)
-    await start_new_event(guild)
 
 async def update_live_message(guild: discord.Guild):
     """
@@ -470,9 +485,12 @@ class AnniView(discord.ui.View):
             interaction (discord.Interaction): The interaction that triggered the button
             button (discord.ui.Button): The button that was clicked
         """
+        guild = interaction.guild
+        if guild is None:
+            return await interaction.response.send_message(content='An error occured while trying to get the guild in the signup button\nPlease report to an @developer')
         await interaction.response.send_message(
             content='ㅤ',
-            view=PersonalSignupView(),
+            view=PersonalSignupView(guild),
             ephemeral=True,
             )
 
@@ -544,14 +562,20 @@ class PersonalSignupView(discord.ui.View):
     """
     View for handling the player signup process with multiple steps.
     """
-    def __init__(self):
+    def __init__(self, guild: discord.Guild):
         super().__init__(timeout=600)
         self.region = Region.NONE
         self.weapon: str = ''
         self.archetype: str = ''
         self.sure = True
+        minimum_guild_required_role_db_res = get_meta('anni_parties_minimum_required_role')
+        if not minimum_guild_required_role_db_res is None:
+            self.minimum_role = int(minimum_guild_required_role_db_res)
+        else:
+            self.minimum_role = None
 
-    @discord.ui.button(label='submit build', style=discord.ButtonStyle.success, row=0)
+
+    @discord.ui.button(label='enter build', style=discord.ButtonStyle.success, row=0)
     async def build_button(self, interaction: discord.Interaction, button: discord.ui.Button): # pylint: disable=unused-argument
         """
         Handles the build submission button click.
@@ -621,6 +645,8 @@ class PersonalSignupView(discord.ui.View):
             button (discord.ui.Button): The button that was clicked
         """
         member = interaction.user
+        if not isinstance(member, discord.Member):
+            return await interaction.response.send_message(content='Please send this from a server and report to a @developer', ephemeral=True)
         guild = interaction.guild
         if guild is None:
             return await interaction.response.send_message(content='apparently this server does not exist, try again, maybe report idk') #pylint: disable=line-too-long
@@ -633,13 +659,20 @@ class PersonalSignupView(discord.ui.View):
         if self.weapon == '' or self.archetype == '':
             await interaction.edit_original_response(content='Please fill in a build')
             return
+        if self.minimum_role is None:
+            guild_outsider_flag = False
+        else:
+            if member.get_role(self.minimum_role) is None:
+                guild_outsider_flag = True
+            else:
+                guild_outsider_flag = False
         leader_flag = False
 
         async with db_lock:
             cursor.execute("""
                 INSERT OR REPLACE INTO signups
-                (user_id, username, anni_id, region, weapon, archetype, reserve, can_lead, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (user_id, username, anni_id, region, weapon, archetype, reserve, can_lead, guild_outsider, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 member.id,
                 str(member),
@@ -649,6 +682,7 @@ class PersonalSignupView(discord.ui.View):
                 self.archetype,
                 int(self.sure),
                 int(leader_flag),
+                int(guild_outsider_flag),
                 int(time.time()),
             ))
             conn.commit()
@@ -656,7 +690,7 @@ class PersonalSignupView(discord.ui.View):
         await interaction.edit_original_response(content='Your party application has been submitted')
         await update_live_message(guild)
 
-async def start_new_event(guild: discord.Guild):
+async def start_new_event(guild: discord.Guild, bot: discord.Client):
     """
     Starts a new Annihilation event and resets the signup system.
 
@@ -692,57 +726,6 @@ async def start_new_event(guild: discord.Guild):
     bot.add_view(AnniView())
     await update_live_message(guild)
 
-@bot.tree.command(
-        name='setup_anni_parties',
-        description='Used to configure the annihilation parties module of the mod.'
-        )
-async def setup_anni_parties(interaction: discord.Interaction, channel:discord.TextChannel): # pylint: disable=line-too-long
-    """
-    Discord command to set up the Annihilation parties system for a specific channel.
-
-    Args:
-        interaction (discord.Interaction): The interaction that triggered the command
-        channel (discord.TextChannel): The channel to set up for parties
-    """
-    set_meta('channel_id', str(channel.id))
-    await interaction.response.send_message(content='channel set!', ephemeral=True)
-
-@bot.event
-async def on_message(message: discord.Message):
-    """
-    Event handler for detecting new Annihilation events from game messages.
-
-    Args:
-        message (discord.Message): The message that was received
-    """
-    if message.author.bot:
-        return
-
-    channel_id = get_meta('channel_id')  #type: ignore
-    if not channel_id is None:
-        if message.channel.id == int(channel_id):
-            if "Prelude to Annihilation!\nHateful echoes erupt from the Realm of War.\nWynn faces Annihilation." in message.content: #pylint: disable=line-too-long
-                guild = message.guild
-                if guild is None:
-                    return
-                await start_new_event(guild)
-
-    await bot.process_commands(message)
-
-@bot.event
-async def on_ready():
-    """
-    Event handler for when the bot is ready and connected to Discord.
-    """
-    # Register the persistent view so button callbacks still work after restarts.
-    bot.add_view(AnniView())
-
-    if get_meta("current_anni_id") is None:
-        set_current_anni_id(1)
-
-    await bot.tree.sync()
-    print(f"Logged in as {bot.user}")
-
 
 class AnniParty(commands.Cog):
     def __init__(self, self_bot):
@@ -762,6 +745,8 @@ class AnniParty(commands.Cog):
 
     @tasks.loop(count=1)
     async def bg_task(self):
+
+        init_database()
 
         guild_id = get_meta("guild_id")
         if guild_id is None:
@@ -785,7 +770,12 @@ class AnniParty(commands.Cog):
     @app_commands.command(name='setup_anni_parties',
         description='Used to configure the annihilation parties module of the mod.'
         )
-    async def setup_anni_parties(self, interaction: discord.Interaction, channel:discord.TextChannel): # pylint: disable=unused-argument,disable=line-too-long
+    async def setup_anni_parties(
+        self,
+        interaction: discord.Interaction,
+        channel: discord.TextChannel,
+        role_to_mention: discord.Role,
+        minimum_needed_role: discord.Role): # pylint: disable=unused-argument,disable=line-too-long
         """
         Discord command to set up the Annihilation parties system for a specific channel.
 
@@ -795,52 +785,68 @@ class AnniParty(commands.Cog):
         """
         set_meta('channel_id', str(channel.id))
         set_meta('guild_id', str(interaction.guild_id))
-        await interaction.response.send_message(content='channel set!', ephemeral=True)
+        set_meta('anni_ping_role_to_mention', str(role_to_mention.id))
+        set_meta('anni_parties_minimum_required_role', str(minimum_needed_role.id))
+        await interaction.response.send_message(content='channel and role to mention set!', ephemeral=True)
     
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-        """
-        Event handler for detecting new Annihilation events from game messages.
+    # @commands.Cog.listener()
+    # async def on_message(self, message: discord.Message):
+    #     """
+    #     Event handler for detecting new Annihilation events from game messages.
 
-        Args:
-            message (discord.Message): The message that was received
-        """
-        if message.author.bot:
-            return
+    #     Args:
+    #         message (discord.Message): The message that was received
+    #     """
+    #     if message.author.bot:
+    #         return
 
-        channel_id = get_meta('channel_id')  #type: ignore
-        if not channel_id is None:
-            if message.channel.id == int(channel_id):
-                if "Prelude to Annihilation!\nHateful echoes erupt from the Realm of War.\nWynn faces Annihilation." in message.content: #pylint: disable=line-too-long
-                    guild = message.guild
-                    if guild is None:
-                        return
-                    await start_new_event(guild)
+    #     channel_id = get_meta('channel_id')  #type: ignore
+    #     if not channel_id is None:
+    #         if message.channel.id == int(channel_id):
+    #             if "Prelude to Annihilation!\nHateful echoes erupt from the Realm of War.\nWynn faces Annihilation." in message.content: #pylint: disable=line-too-long
+    #                 guild = message.guild
+    #                 if guild is None:
+    #                     return
+    #                 await start_new_event(guild)
 
-    @app_commands.command(name='manual_start_anni')
-    async def manual_start_anni(self, interaction: discord.Interaction):
+    @app_commands.command(
+            name='start-anni-party-signups',
+            description='Starts the signup process for the guild anni parties')
+    async def start_annihilation_parties(self, interaction: discord.Interaction):
         """
         Discord command to send a test embed and start the signup process.
 
         Args:
             interaction (discord.Interaction): The interaction that triggered the command
         """
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
         guild = interaction.guild
         if guild is None:
-            await interaction.followup.send(content="apparently the discord server you are sending this from doesn't exist, please don't report. I don't want to deal with this") #pylint: disable=line-too-long
+            await interaction.followup.send(content="apparently the discord server you are sending this from doesn't exist, please don't report. I don't want to deal with this", ephemeral=True) #pylint: disable=line-too-long
             return
+        channel = interaction.channel
+        if channel is None:
+            return await interaction.followup.send(content='An error occured while getting this interaction\'s channel\nPlease try again and report this to someone with the @developer role')
+        if isinstance(channel, (discord.ForumChannel, discord.CategoryChannel)):
+            return await interaction.followup.send(content='An error occured while getting this interaction\'s channel\nPlease try again and report this to someone with the @developer role')
         await interaction.followup.send(content='started signups!', ephemeral=True)
-        await start_new_event(guild)
+        role_db_res = get_meta('anni_ping_role_to_mention')
+        if role_db_res is None:
+            await interaction.followup.send(content='Please have a hr member set the role to mention', ephemeral=True)
+            return
+        role_id = int(role_db_res)
+        role = guild.get_role(role_id)
+        if role is None:
+            return await interaction.followup.send(content='Error while trying to fetch the role', ephemeral=True)
+        await channel.send(content=f'{role.mention} Annihilation starts soon!')
+        await start_new_event(guild, self.bot)
+
+
 
 async def setup(global_bot):
     print('setup called')
     await global_bot.add_cog(AnniParty(global_bot))
 
 
-
-
 if __name__ == '__main__':
-
-
-    bot.run(TOKEN)
+    print('make this do something first maybe')

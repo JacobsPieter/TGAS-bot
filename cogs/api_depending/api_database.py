@@ -48,6 +48,29 @@ class Database:
     
     def convert_db_input_columns(self, columns: dict[str, DBInputType]) -> dict[str, DBcolumnType]:
         return {key: self.convert_db_types(value)[0] for key, value in columns.items()}
+    
+    def run_migrations(self):
+        version = self.conn.execute("PRAGMA user_version").fetchone()[0]
+
+        if version < 1:
+            try:
+                self.conn.execute("""
+                    ALTER TABLE members
+                    ADD COLUMN requested_tome_received
+                    INTEGER DEFAULT 1
+                """)
+            except sqlite3.OperationalError:
+                pass
+            self.conn.execute("PRAGMA user_version = 1")
+
+        # if version < 2:
+        #     self.conn.execute("""
+        #         ALTER TABLE members
+        #         ADD COLUMN avatar_url TEXT
+        #     """)
+        #     self.conn.execute("PRAGMA user_version = 2")
+
+        self.conn.commit()
 
 
 
