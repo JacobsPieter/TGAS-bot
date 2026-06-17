@@ -2,6 +2,7 @@ import os
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
+import utils.added_exceptions as excepts
 
 load_dotenv()
 
@@ -40,18 +41,27 @@ class Bot(commands.Bot):
 async def load_cogs(bot):
     EXTENSIONS = [
     "cogs.anni_party",
-    #"cogs.random_gambling_messages",
+    "cogs.random_gambling_messages",
     "cogs.api_depending.api_queries"
     ]
     for ext in EXTENSIONS:
         await bot.load_extension(ext)
 
 
-
 def main():
+    global global_bot # pylint: disable=global-variable-undefined
     bot = Bot()
+    global_bot = bot
     bot.run(TOKEN)
+
 
 
 if __name__ == '__main__':
     main()
+
+@global_bot.tree.error
+async def error_handling(interaction: discord.Interaction, error):
+    if not interaction.response.is_done():
+        await interaction.response.send_message('An error occured', ephemeral=True)
+    excepts.handle_error(error)
+

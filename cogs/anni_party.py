@@ -36,7 +36,6 @@ Functions:
     on_ready: Bot ready event handler
 """
 
-import os
 import asyncio
 import sqlite3
 import time
@@ -57,7 +56,7 @@ TEAM_SIZE = 10  # Maximum players per party
 
 # ------------------ DB ------------------
 def init_database():
-    global db_lock, conn, cursor
+    global db_lock, conn, cursor #pylint: disable=global-variable-undefined
     conn = sqlite3.connect("persistent_data\\anni_party.db", check_same_thread=False)
     cursor = conn.cursor()
 
@@ -490,7 +489,7 @@ class AnniView(discord.ui.View):
             return await interaction.response.send_message(content='An error occured while trying to get the guild in the signup button\nPlease report to an @developer')
         await interaction.response.send_message(
             content='ㅤ',
-            view=PersonalSignupView(guild),
+            view=PersonalSignupView(),
             ephemeral=True,
             )
 
@@ -562,7 +561,7 @@ class PersonalSignupView(discord.ui.View):
     """
     View for handling the player signup process with multiple steps.
     """
-    def __init__(self, guild: discord.Guild):
+    def __init__(self):
         super().__init__(timeout=600)
         self.region = Region.NONE
         self.weapon: str = ''
@@ -602,7 +601,7 @@ class PersonalSignupView(discord.ui.View):
             self.sure = True
         else:
             self.sure = False
-        await interaction.response.send_message(content=f'ㅤ', ephemeral=True, delete_after=0) #pylint: disable=line-too-long
+        await interaction.response.send_message(content='ㅤ', ephemeral=True, delete_after=0) #pylint: disable=line-too-long
 
     @discord.ui.select(
             options=[

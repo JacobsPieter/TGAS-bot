@@ -7,8 +7,6 @@ import asyncio
 from typing import Any
 from itertools import pairwise, dropwhile
 
-import matplotlib
-matplotlib.use("Agg")
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
 
@@ -19,7 +17,9 @@ from discord import app_commands
 from discord.ext import tasks, commands
 from discord import ui
 
-import cogs.api_depending.api_database as db
+import cogs.api_database as db
+import utils.discordutils as dc_utils
+import utils.added_exceptions as excepts
 
 
 class APIHandler:
@@ -85,8 +85,8 @@ def init_database(database_path: str = ".\\persistent_data\\guild_api_database.d
     general_database_operations_object.run_migrations()
 
 
-    meta = db.UpdatingTable("meta", p)
-    meta.create(('key', str()), {'value': str()})
+    meta = db.MetaTable(p)
+    meta.create()
 
     members_db = db.UpdatingTable('members', p)
     members_db.create(
@@ -265,30 +265,12 @@ def get_completed_graids(member: APIMember):
         completed_graids_dict.pop(raid)
     return completed_graids_dict
 
-def mention_user(user_uuid: str, guild: discord.Guild) -> str:
-    playerdata = members_db.fetchone('uuid', user_uuid)
-    if not playerdata is None:
-        username: str = playerdata['username']
-        name = guild.get_member_named(username) if not guild is None else None
-        playername = name.mention if not name is None else username
-    else:
-        username = user_uuid
-        playername = user_uuid
-    return playername
-
-
-def get_player_username(player_uuid: str) -> str:
-    playerdata = members_db.fetchone('uuid', player_uuid)
-    if not playerdata is None:
-        playername: str = playerdata['username']
-    else:
-        playername = player_uuid
-    return playername
 
 
 class APIQueries(commands.Cog):
     def __init__(self, passed_bot):
         self.bot: discord.Client = passed_bot
+        self.plot_semaphore = asyncio.Semaphore(3)
 
 
     async def start_loop(self):
@@ -304,23 +286,16 @@ class APIQueries(commands.Cog):
     @tasks.loop(count=1)
     async def bg_task(self):
 
-        self.plot_semaphore = asyncio.Semaphore(3)
-
-        guild_id = meta.fetchone('key', "guild_id")
-        if guild_id is None:
-            print("Please set guild first!")
-            return
-
-        guild_id = int(guild_id['value'])
-
-        guild = self.bot.get_guild(guild_id)
+        guild = dc_utils.get_guild(self.bot, meta)
 
         if guild is None:
+            guild_id = meta.get_guild_id()
+            if guild_id is None:
+                raise excepts.GuildNotConfiguredError()
             try:
                 guild = await self.bot.fetch_guild(guild_id)
-            except discord.NotFound:
-                print("Guild not found / bot removed")
-                return
+            except discord.NotFound as e:
+                raise excepts.GuildNotFoundError(guild_id) from e
         
         self.bot.add_view(RequestedTomesView(guild))
 
@@ -329,86 +304,80 @@ class APIQueries(commands.Cog):
         self.update_playtime_loop.start()
 
 
-    #@app_commands.command(name="set_graid_channel")
-    async def set_channel_for_graids(self, interaction: discord.Interaction, channel:discord.TextChannel, role: discord.Role):
-        role_id = meta.fetchone('key', 'api_queries_role_id')
-        if not role_id is None:
-            if interaction.user.get_role(int(role_id['value'])) is None: # type: ignore pylint: disable=line-too-long
-                return await interaction.response.send_message(
-                    content="You don't have permission to use this command"
-                    )
-        meta.update('key', 'graid_message_channel', {'value': str(channel.id)})
-        meta.update('key', 'guild_id', {'value': str(channel.guild.id)})
-        meta.update('key', 'api_queries_role_id', {'value': str(role.id)})
-        await interaction.response.send_message(content='channel and role set!', ephemeral=True)
+    @app_commands.command(name="set_graid_channel")
+    async def set_channel_for_graids(self, interaction: discord.Interaction, channel:discord.TextChannel):
+        dc_utils.set_channel(meta.ChannelUses.WYNNAPI_GRAIDS_TRACKING_SEND, channel, meta)
+        dc_utils.set_guild(channel.guild, meta)
+        await interaction.response.send_message(content='channel set!', ephemeral=True)
 
 
     @tasks.loop(minutes=2)
     async def fetch_guild_endpoint(self):
-        data = await api_handler.get_endpoint_data(api_handler.construct_guild_endpoint_url())
+        try:
+            data = await api_handler.get_endpoint_data(api_handler.construct_guild_endpoint_url())
 
-        #TODO: implement guild global data handling
-        #await handle_graids(self, data)
+            await handle_graids(self, data)
 
-        for rank, rank_members in data['members'].items():
-            if not rank in {"owner", "chief", "strategist", "captain", "recruiter", "recruit"}: # all guild ranks, will need updating in case of update
-                continue
-            for guild_member, member_data in rank_members.items():
-                member = APIMember(guild_member, member_data, rank)
-                if member.total_guild_raids is None:
+            for rank, rank_members in data['members'].items():
+                if not rank in {"owner", "chief", "strategist", "captain", "recruiter", "recruit"}: # all guild ranks, will need updating in case of update
                     continue
-                member.update_member_database()
+                for guild_member, member_data in rank_members.items():
+                    member = APIMember(guild_member, member_data, rank)
+                    if member.total_guild_raids is None:
+                        continue
+                    member.update_member_database()
+        except: # pylint: disable=bare-except
+            return
     
     @fetch_guild_endpoint.before_loop
     async def fetch_guild_endpoint_before_loop(self):
         await self.bot.wait_until_ready()
 
-    #@app_commands.command(name="set_aspects_rewarded")
+
+
+    @app_commands.command(name="set_aspects_rewarded")
     async def reward_aspects(self, interaction: discord.Interaction):
         await interaction.response.send_modal(AspectRewardModal())
 
     @app_commands.command(name='setup_tomes', description='all times are in days')
     async def setup_tomes(self, interaction:discord.Interaction, cooldown: int, required_weekly_streak: int):
-        meta.update('key', 'tome_required_weekly_streak', columns={'value': str(required_weekly_streak)})
-        meta.update('key', 'tome_request_time_interval', columns={'value': str(cooldown)})
+        meta.set_other(meta.OtherKeys.WYNNAPI_TOMES_REQUESTING_TIMEINTERVAL, cooldown)
+        meta.set_other(meta.OtherKeys.WYNNAPI_TOMES_REQUESTING_WEEKLYSTREAK, required_weekly_streak)
         await interaction.response.send_message(content='Config has been set.', ephemeral=True)
 
     @app_commands.command(name='send_tome_requests_message')
     async def send_tome_requests_message(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         channel = interaction.channel
-        if isinstance(channel, (discord.ForumChannel, discord.CategoryChannel)) or channel is None:
+        if not isinstance(channel, discord.TextChannel) or channel is None:
             return
         guild = interaction.guild
         if guild is None:
             return
-        meta.update('key', 'guild_id', columns={'value': guild.id})
-        meta.update('key', 'tome_requests_channel_id', columns={'value': channel.id})
+        dc_utils.set_guild(guild, meta)
+        dc_utils.set_channel(meta.ChannelUses.WYNNAPI_TOMES_REQUESTING_LIVE, channel, meta)
         if not self.tome_update_looping.is_running():
             self.tome_update_looping.start()
     
     @tasks.loop(minutes=2)
     async def tome_update_looping(self):
-        guild_id_db_res = meta.fetchone('key','guild_id')
-        if guild_id_db_res is None:
-            print('set a guild!')
+        try:
+            guild = dc_utils.get_guild(self.bot, meta)
+            await update_tome_live_message(guild)
+        except: # pylint: disable=bare-except
             return
-        guild = self.bot.get_guild(int(guild_id_db_res['value']))
-        if guild is None:
-            print('invalid guild')
-            return
-        await update_tome_live_message(guild)
 
     @tome_update_looping.before_loop
     async def tome_update_looping_before_loop(self):
         await self.bot.wait_until_ready()
-    
+
+
     @app_commands.command(name='reward_tomes')
     async def reward_tomes(self, interaction: discord.Interaction):
         await interaction.response.send_modal(TomeRewardModal())
 
 
-    #@app_commands.command(name='get_user_playtime_graph')
+    @app_commands.command(name='get_user_playtime_graph')
     async def get_user_playtime_graph(self, interaction: discord.Interaction, member: discord.Member):
         await interaction.response.defer()
         async with self.plot_semaphore:
@@ -458,18 +427,21 @@ class APIQueries(commands.Cog):
 
     @tasks.loop(hours=2)
     async def update_playtime_loop(self):
-        members = members_db.fetchall()
-        for member in members:
-            if member['playtime'] is None:
-                continue
-            current_tracked_playtime = playtime_tracking_db.fetchlast_conditional(f'uuid = \'{member["uuid"]}\'')
-            if current_tracked_playtime is None:
+        try:
+            members = members_db.fetchall()
+            for member in members:
+                if member['playtime'] is None:
+                    continue
+                current_tracked_playtime = playtime_tracking_db.fetchlast_conditional(f'uuid = \'{member["uuid"]}\'')
+                if current_tracked_playtime is None:
+                    playtime_tracking_db.updatecolumns(columns={'uuid': member['uuid'], 'playtime': member['playtime']})
+                    continue
+                if current_tracked_playtime['playtime'] == member['playtime']:
+                    continue
                 playtime_tracking_db.updatecolumns(columns={'uuid': member['uuid'], 'playtime': member['playtime']})
-                continue
-            if current_tracked_playtime['playtime'] == member['playtime']:
-                continue
-            playtime_tracking_db.updatecolumns(columns={'uuid': member['uuid'], 'playtime': member['playtime']})
-    
+        except: # pylint: disable=bare-except
+            return
+
     @update_playtime_loop.before_loop
     async def playtime_updating_loop_before_loop(self):
         await self.bot.wait_until_ready()
@@ -506,20 +478,8 @@ async def handle_graids(cog: APIQueries, data):
 
 
 async def send_discord_graids_completed_message(cog: APIQueries, completed_graids: dict[str, dict[str, int]]):
-    channel_id_res = meta.fetchone('key', 'graid_message_channel')
-    if channel_id_res is None:
-        print("Channel needs to be set! Use the command for setting up this module to set the channel.")
-        return
-    channel_id = channel_id_res['value']
-    channel = cog.bot.get_channel(int(channel_id))
-    if channel is None:
-        await cog.bot.fetch_channel(int(channel_id))
-        channel = cog.bot.get_channel(int(channel_id))
-        if channel is None:
-            return
-    if not isinstance(channel, (discord.abc.GuildChannel)):
-        return
-    guild = channel.guild
+    guild = dc_utils.get_guild(cog.bot, meta)
+    channel = dc_utils.get_textchannel(meta.ChannelUses.WYNNAPI_GRAIDS_TRACKING_SEND, guild, meta)
 
     embeds = []
     for raid, players in completed_graids.items():
@@ -530,7 +490,7 @@ async def send_discord_graids_completed_message(cog: APIQueries, completed_graid
         if not len(players) > 0:
             continue
         for player, amount in players.items():
-            player_description = "".join((f'{mention_user(player, guild)}ㅤ{amount} | '))
+            player_description = "".join((f'{dc_utils.mention_user(player, guild, members_db)}ㅤ{amount} | '))
             description = f'{description}\n{player_description}'
             match raid:
                 case "notg":
@@ -566,9 +526,9 @@ async def send_discord_graids_completed_message(cog: APIQueries, completed_graid
             member_guild_raids_db.update('uuid', data['uuid'], columns={'aspects': 0, 'next_aspect': 0})
             continue
         if data["aspects"] > 0:
-            aspect_reward_string = f'{aspect_reward_string}\n{mention_user(data['uuid'], guild)} | {data["aspects"]}'
+            aspect_reward_string = f'{aspect_reward_string}\n{dc_utils.mention_user(data['uuid'], guild, members_db)} | {data["aspects"]}'
         if data["next_aspect"] > 0:
-            half_aspects_string = f'{half_aspects_string}\n{mention_user(data['uuid'], guild)}'
+            half_aspects_string = f'{half_aspects_string}\n{dc_utils.mention_user(data['uuid'], guild, members_db)}'
 
     aspect_embed.add_field(name="aspects to reward", value=aspect_reward_string)
     aspect_embed.add_field(name="needs to complete another raid\nto get an aspect", value=half_aspects_string)
@@ -591,7 +551,7 @@ class AspectRewardModal(discord.ui.Modal, title="Aspects rewarded in-game"):
     def create_modal_items(self):
         options = []
         for player, amount in self.aspects_by_player.items():
-            to_add = discord.CheckboxGroupOption(label=f"{amount} aspects rewarded to {get_player_username(player)}", value=player)
+            to_add = discord.CheckboxGroupOption(label=f"{amount} aspects rewarded to {dc_utils.get_player_username(player, members_db)}", value=player)
             options.append(to_add)
             if len(options) >= 10:
                 add_option_group = ui.Label(text="ㅤ", component=ui.CheckboxGroup(options=options, max_values=len(options), min_values=0, required=False))
@@ -605,7 +565,7 @@ class AspectRewardModal(discord.ui.Modal, title="Aspects rewarded in-game"):
             self.add_item(empty_text)
 
 
-    async def on_submit(self, interaction: discord.Interaction) -> None:
+    async def on_submit(self, interaction: discord.Interaction) -> None: #pylint: disable=arguments-differ
         reset_players = []
         guild = interaction.guild
         if guild is None:
@@ -617,7 +577,7 @@ class AspectRewardModal(discord.ui.Modal, title="Aspects rewarded in-game"):
                     member_guild_raids_db.update('uuid', player, columns={'aspects': 0})
                     reset_players.append(player)
         if len(reset_players) > 0:
-            message = f"reset aspects for {', '.join(map(str,(mention_user(player, guild) for player in reset_players)))}"
+            message = f"reset aspects for {', '.join(map(str,(dc_utils.mention_user(player, guild, members_db) for player in reset_players)))}"
             await interaction.response.send_message(message, ephemeral=True)
         else:
             message = "ㅤ"
@@ -625,15 +585,12 @@ class AspectRewardModal(discord.ui.Modal, title="Aspects rewarded in-game"):
         
 
 async def handle_tome_requests(interaction: discord.Interaction):
-    #TODO: Make a command to set a tome as been rewarded
-    if isinstance(interaction.user, discord.Member):
-        username = interaction.user.display_name
-    else:
+    if not isinstance(interaction.user, discord.Member):
         return
+    username = interaction.user.display_name
     membersdata = members_db.fetchall_conditional(f'username = \'{username}\'')
     if membersdata is None:
-        await interaction.followup.send(content="You don't seem to be in the guild.\nIf you are, this is an error, please report\nIf you aren't in the guild, please ignore", ephemeral=True)
-        return
+        return await interaction.followup.send(content="You don't seem to be in the guild.\nIf you are, this is an error, please report\nIf you aren't in the guild, please ignore", ephemeral=True)
     memberdata = membersdata[0]
     uuid = memberdata['uuid']
     tome_requested_db_res = tome_requested_db.fetchlast_conditional(f'uuid = \'{uuid}\'')
@@ -643,27 +600,23 @@ async def handle_tome_requests(interaction: discord.Interaction):
         tome_requested_db_result = {'timestamp': 0}
     last_requested_timestamp = tome_requested_db_result['timestamp']
     last_requested = datetime.datetime.fromtimestamp(last_requested_timestamp)
-    time_elapsed_needed = meta.fetchone('key','tome_request_time_interval')
-    if time_elapsed_needed is None:
-        await interaction.followup.send(content='Please ask a moderator to set the minimum interval needed to request a tome again', ephemeral=True)
-        return
-    if datetime.datetime.now() - last_requested < datetime.timedelta(days=int(time_elapsed_needed['value'])):
-        await interaction.followup.send(content=f'Please wait {time_elapsed_needed['value']} days since your last request before requesting a tome again', ephemeral=True)
-        return
+    time_elapsed_needed_str = meta.get_other(meta.OtherKeys.WYNNAPI_TOMES_REQUESTING_TIMEINTERVAL)
+    if time_elapsed_needed_str is None:
+        return await interaction.followup.send(content='Please ask a moderator to set the minimum interval needed to request a tome again', ephemeral=True)
+    time_elapsed_needed = int(time_elapsed_needed_str)
+    if datetime.datetime.now() - last_requested < datetime.timedelta(days=time_elapsed_needed):
+        return await interaction.followup.send(content=f'Please wait {time_elapsed_needed} days since your last request before requesting a tome again', ephemeral=True)
     if not memberdata['weekly']:
-        await interaction.followup.send(content='Please do your weekly before requesting a tome', ephemeral=True)
-        return
-    required_weekly_streak = meta.fetchone('key', 'tome_required_weekly_streak')
-    if required_weekly_streak is None:
-        await interaction.followup.send(content='Please ask a moderator to set the minimum weekly streak to request a tome', ephemeral=True)
-        return
-    if memberdata['weekly_streak'] < int(required_weekly_streak['value']):
-        await interaction.followup.send(content=f'You need a weekly streak of at least {required_weekly_streak['value']} to request a tome', ephemeral=True)
-        return
+        return await interaction.followup.send(content='Please do your weekly before requesting a tome', ephemeral=True)
+    required_weekly_streak_str = meta.get_other(meta.OtherKeys.WYNNAPI_TOMES_REQUESTING_WEEKLYSTREAK)
+    if required_weekly_streak_str is None:
+        return await interaction.followup.send(content='Please ask a moderator to set the minimum weekly streak to request a tome', ephemeral=True)
+    required_weekly_streak = int(required_weekly_streak_str)
+    if memberdata['weekly_streak'] < required_weekly_streak:
+        return await interaction.followup.send(content=f'You need a weekly streak of at least {required_weekly_streak} to request a tome', ephemeral=True)
     tome_requested_db.updatecolumns(columns={'uuid': uuid})
     if interaction.guild is None:
-        await interaction.followup.send(content='Please don\'t use this outside a server')
-        return
+        return await interaction.followup.send(content='Please don\'t use this outside a server')
     members_db.update('uuid', uuid, columns={'requested_tome_received': 0})
     guild = interaction.guild
     if guild is None:
@@ -680,15 +633,16 @@ def create_tome_cooldown_string(guild: discord.Guild) -> str:
         print(e)
     if requested == []:
         return 'No one currently on cooldown.'
-    cooldown = meta.fetchone('key', 'tome_request_time_interval')
-    if cooldown is None:
+    cooldown_db_res = meta.get_other(meta.OtherKeys.WYNNAPI_TOMES_REQUESTING_TIMEINTERVAL)
+    if cooldown_db_res is None:
         return 'error while constructing cooldown list'
+    cooldown = int(cooldown_db_res)
     on_cooldown_str = ''
     for memberdict in requested:
-        if (datetime.datetime.now() - datetime.datetime.fromtimestamp(memberdict['timestamp'])).total_seconds() > datetime.timedelta(days=int(cooldown['value'])).total_seconds():
+        if (datetime.datetime.now() - datetime.datetime.fromtimestamp(memberdict['timestamp'])).total_seconds() > datetime.timedelta(days=int(cooldown)).total_seconds():
             continue
-        timestamp_value = int(memberdict['timestamp']) + int(datetime.timedelta(days=int(cooldown['value'])).total_seconds())
-        on_cooldown_str = '\n'.join((on_cooldown_str, f'{mention_user(memberdict['uuid'], guild)} ---------- <t:{timestamp_value}> | <t:{timestamp_value}:R>'))
+        timestamp_value = int(memberdict['timestamp']) + int(datetime.timedelta(days=int(cooldown)).total_seconds())
+        on_cooldown_str = '\n'.join((on_cooldown_str, f'{dc_utils.mention_user(memberdict['uuid'], guild, members_db)} ---------- <t:{timestamp_value}> | <t:{timestamp_value}:R>'))
     if on_cooldown_str == '':
         return 'No one currently on cooldown.'
     return f'Person ---------- Date for next possible request | relative time\n{on_cooldown_str}'
@@ -699,12 +653,11 @@ def create_tome_to_still_hand_out_string(guild: discord.Guild) -> str:
         return ''
     return_str = ''
     for member in db_res:
-        return_str = '\n- '.join((return_str, mention_user(member['uuid'], guild)))
+        return_str = '\n- '.join((return_str, dc_utils.mention_user(member['uuid'], guild, members_db)))
     return f'### People who have requested a tome but not yet received one\n-# You will receive one as soon as possible\n-# Your cooldown has already started{return_str}'
 
 
 class RequestedTomesView(discord.ui.LayoutView):
-    #TODO: Make persistent after restarts
     def __init__(self, guild):
         super().__init__(timeout=None)
 
@@ -782,30 +735,18 @@ async def update_tome_live_message(guild: discord.Guild):
     Args:
         guild (discord.Guild): The guild to update the message for
     """
-    channel_meta_id = meta.fetchone('key',"tome_requests_channel_id")
-    if channel_meta_id is None:
-        print('Please set a channel!')
-        return
-    channel_id: int = int(channel_meta_id['value'])
-    channel = guild.get_channel(channel_id)
-    if channel is None:
-        return
-    if isinstance(channel, (discord.ForumChannel, discord.CategoryChannel)):
-        return
 
-    message_id = meta.fetchone('key', "live_tome_message_id")
-
+    channel = dc_utils.get_textchannel(meta.ChannelUses.WYNNAPI_TOMES_REQUESTING_LIVE, guild, meta)
 
     try:
-        if message_id:
-            message = await channel.fetch_message(int(message_id['value']))
-            await message.edit(view=RequestedTomesView(guild))
-        else:
-            message = await channel.send(view=RequestedTomesView(guild))
-            meta.update('key', 'live_tome_message_id', columns={"value": str(message.id)})
-    except discord.NotFound:
+        message = await dc_utils.get_message(meta.MessageIds.WYNNAPI_TOMES_REQUESTING_LAYOUTVIEW, channel, meta)
+        await message.edit(view=RequestedTomesView(guild))
+    except excepts.MessageNotConfiguredError:
         message = await channel.send(view=RequestedTomesView(guild))
-        meta.update('key', 'live_tome_message_id', columns={"value": str(message.id)})
+        dc_utils.set_message(meta.MessageIds.WYNNAPI_TOMES_REQUESTING_LAYOUTVIEW, message, meta)
+    except excepts.MessageNotFoundError:
+        message = await channel.send(view=RequestedTomesView(guild))
+        dc_utils.set_message(meta.MessageIds.WYNNAPI_TOMES_REQUESTING_LAYOUTVIEW, message, meta)
 
 
 class TomeRewardModal(discord.ui.Modal, title="Tomes rewarded in-game"):
@@ -828,7 +769,7 @@ class TomeRewardModal(discord.ui.Modal, title="Tomes rewarded in-game"):
     def create_modal_items(self):
         options = []
         for player, amount in self.to_reward.items():
-            to_add = discord.CheckboxGroupOption(label=f"{amount} tomes rewarded to {get_player_username(player)}", value=player)
+            to_add = discord.CheckboxGroupOption(label=f"{amount} tomes rewarded to {dc_utils.get_player_username(player, members_db)}", value=player)
             options.append(to_add)
             if len(options) >= 10:
                 add_option_group = ui.Label(text="ㅤ", component=ui.CheckboxGroup(options=options, max_values=len(options), min_values=0, required=False))
@@ -839,7 +780,7 @@ class TomeRewardModal(discord.ui.Modal, title="Tomes rewarded in-game"):
             self.add_item(add_option_group)
 
 
-    async def on_submit(self, interaction: discord.Interaction) -> None:
+    async def on_submit(self, interaction: discord.Interaction) -> None: #pylint: disable=arguments-differ
         message_send = await interaction.response.defer(ephemeral=True)
         reset_players = []
         guild = interaction.guild
@@ -853,7 +794,7 @@ class TomeRewardModal(discord.ui.Modal, title="Tomes rewarded in-game"):
                     reset_players.append(player)
         if len(reset_players) > 0:
             await update_tome_live_message(guild)
-            message = f"reset tomes to reward for {', '.join(map(str,(mention_user(player, guild) for player in reset_players)))}"
+            message = f"reset tomes to reward for {', '.join(map(str,(dc_utils.mention_user(player, guild, members_db) for player in reset_players)))}"
             await interaction.followup.send(message, ephemeral=True)
         else:
             message = "ㅤ"
@@ -918,19 +859,13 @@ def main(global_bot):
     api_queries = APIQueries(global_bot)
     init_database()
 
-    
-
 
 
 async def setup(global_bot):
     main(global_bot)
     await global_bot.add_cog(api_queries)
 
-    
+
 
 if __name__ == '__main__':
-    print('Maybe be smart and make this do something')    
-    #print(api_handler.get_endpoint_data("https://api.wynncraft.com/v3/player/Jacobs0811?fullResult"))
-    #api_handler.dump_endpoint_data(api_handler.construct_guild_endpoint_url())
-    #test = fetch_guild_endpoint()
-
+    print('Maybe be smart and make this do something')
