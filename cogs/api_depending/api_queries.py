@@ -17,7 +17,7 @@ from discord import app_commands
 from discord.ext import tasks, commands
 from discord import ui
 
-import cogs.api_database as db
+import cogs.database as db
 import utils.discordutils as dc_utils
 import utils.added_exceptions as excepts
 
