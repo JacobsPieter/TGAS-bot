@@ -15,7 +15,14 @@ def handle_error(error: Exception):
     #logger.exception("Unhandled error", exc_info=error)
 
 
-class DatabaseException(Exception):
+class BotBaseException(Exception):
+    """
+    Base exception for the bot, all exceptions should inherit from here
+    """
+
+
+
+class DatabaseException(BotBaseException):
     """
     Base exception for all database-related errors.
 
@@ -83,7 +90,7 @@ class RoleNotConfiguredError(DatabaseException):
         )
 
 
-class DiscordAPIException(Exception):
+class DiscordAPIException(BotBaseException):
     """
     Base exception for all Discord object lookup errors.
 
@@ -157,3 +164,11 @@ class RoleNotFoundError(DiscordAPIException):
             f"Role '{role.name}' "
             f"(ID {role_id}) could not be found."
         )
+
+
+class InvalidTimestampError(BotBaseException, ValueError):
+    """Raised when a provided timestamp is not a valid Discord timestamp."""
+
+    def __init__(self, value: str):
+        self.value = value
+        super().__init__(f"Invalid Discord timestamp format: `{value}`")

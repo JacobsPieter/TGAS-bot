@@ -1,3 +1,5 @@
+import datetime
+import re
 import cogs.database as db
 import discord
 import utils.added_exceptions as excepts
@@ -86,3 +88,13 @@ def get_role(role: db.MetaTable.RoleIds, guild: discord.Guild, meta_db: db.MetaT
     if return_role is None:
         raise excepts.RoleNotFoundError(role, role_id)
     return return_role
+
+
+def parse_discord_timestamps(string: str) -> datetime.datetime:
+    timestamp_regex = re.compile(pattern=r"<t:(\d+)(?::[tTdDfFsSR])?>")
+    match = timestamp_regex.fullmatch(string=string)
+    if not match:
+        raise excepts.InvalidTimestampError(string)
+    timestamp = datetime.datetime.fromtimestamp(timestamp=int(match.group(1)))
+    return timestamp
+

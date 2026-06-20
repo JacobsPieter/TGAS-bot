@@ -391,9 +391,8 @@ class MetaTable:
         # Examples: WYNNAPI_GRAIDS_TRACKING_SEND     = 'wynnapi_graids_tracking_send_channel_id'
         #           WYNNAPI_TOMES_REQUESTING_LIVE    = 'wynnapi_tomes_requesting_live_channel_id'
         #           ANNIHILATION_PARTIES_SIGNUP_LIVE = 'annihilation_parties_signup_live_channel_id'
-        #TODO: Update the keys to conform to the standard (will be some hard work there...)
-        WYNNAPI_GRAIDS_TRACKING_SEND  = 'graid_message_channel'
-        WYNNAPI_TOMES_REQUESTING_LIVE = 'tome_requests_channel_id'
+        WYNNAPI_GRAIDS_TRACKING_SEND  = 'wynnapi_graids_tracking_send_channel_id'
+        WYNNAPI_TOMES_REQUESTING_LIVE = 'wynnapi_tomes_requesting_live_channel_id'
         # Not yet connected to this system, will use this key when hooked up
         ANNIHILATION_PARTIES_SIGNUP_LIVE = 'annihilation_parties_signup_live_channel_id'
 
@@ -401,8 +400,7 @@ class MetaTable:
         # Standard: MODULE_SUBMODULE_PROCESS_MESSAGENAME = 'module_submodule_process_messagename_message_id'
         # Examples: WYNNAPI_TOMES_REQUESTING_LAYOUTVIEW  = 'wynnapi_tomes_requesting_layoutview_message_id'
         #           ANNIHILATION_PARTIES_SIGNUP_EMBEDS   = 'annihilation_parties_signup_embeds_message_id'
-        #TODO: Update the keys to conform to the standard (will be some hard work there...)
-        WYNNAPI_TOMES_REQUESTING_LAYOUTVIEW  = 'live_tome_message_id'
+        WYNNAPI_TOMES_REQUESTING_LAYOUTVIEW  = 'wynn_api_tomes_requesting_layoutview_message_id'
         # Not yet connected to this system, will use this key when hooked up
         ANNIHILATION_PARTIES_SIGNUP_EMBEDS   = 'annihilation_parties_signup_embeds_message_id'
     
@@ -427,16 +425,15 @@ class MetaTable:
         GENERAL_HIGHRANK = 'general_highrank_role_id'
         #TODO: Update the keys to conform to the standard (will be some hard work there...)
         # Not yet connected to this system, will use this key when hooked up
-        SPECIFIC_ANNIHILATION_PING = 'anni_ping_role_to_mention'
-        SPECIFIC_ANNIHILATION_PARTIES_SIGNUP_PERMISSION = 'anni_parties_minimum_required_role'
+        SPECIFIC_ANNIHILATION_PING = 'specific_annihilation_ping_role_id'
+        SPECIFIC_ANNIHILATION_PARTIES_SIGNUP_PERMISSION = 'specific_annihilation_parties_signup_permission_role_id'
 
     class OtherKeys(Enum):
         # Standard: MODULE_SUBMODULE_PROCESS_NAME         = 'module_submodule_process_messagename_other'
         # Examples: WYNNAPI_TOMES_REQUESTING_WEEKLYSTREAK = 'wynnapi_tomes_requesting_weeklystreak_other'
         #           WYNNAPI_TOMES_REQUESTING_TIMEINTERVAL = 'wynnapi_tomes_requesting_timeinterval_other'
-        #TODO: Update the keys to conform to the standard (will be some hard work there...)
-        WYNNAPI_TOMES_REQUESTING_WEEKLYSTREAK = 'tome_required_weekly_streak'
-        WYNNAPI_TOMES_REQUESTING_TIMEINTERVAL = 'tome_request_time_interval'
+        WYNNAPI_TOMES_REQUESTING_WEEKLYSTREAK = 'wynnapi_tomes_requesting_weeklystreak_other'
+        WYNNAPI_TOMES_REQUESTING_TIMEINTERVAL = 'wynnapi_tomes_requesting_timeinterval_other'
         # Not yet connected to this system, will use this key when hooked up
         ANNIHILATION_PARTIES_TRACKING_ID      = 'annihilation_parties_tracking_id_other'
 

@@ -29,7 +29,7 @@
 
 ----
 
-- [ ] member_guild_raids
+- [x] member_guild_raids
   - uuid
   - total
   - notg
