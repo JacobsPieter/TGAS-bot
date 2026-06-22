@@ -1,28 +1,62 @@
 import datetime
 import asyncio
+import logging
 
 import discord
 from discord.ext import commands, tasks
 from discord import ui
 from discord import app_commands
 
-import cogs.database as db
+import utils.database as db
 import utils.general_classes as classes
 import utils.discordutils as dc_utils
+import utils.added_exceptions as excepts
+from utils.added_exceptions import handle_loop_errors
+from utils.bot import Bot
+
+
+
+
+
+logger = logging.getLogger(name=__name__)
+
+def init_database(database_path: str = ".\\persistent_data\\guild_api_database.db"):
+    global meta, members_db, member_guild_raids_db # pylint: disable=global-variable-undefined
+
+    p = database_path
+
+    meta = db.MetaTable(p)
+
+    members_db = db.UpdatingTable('members', p)
+    
+    member_guild_raids_db = db.UpdatingTable('member_guild_raids', p)
+
 
 
 class GraidsCog(commands.Cog):
     def __init__(self, passed_bot):
-        self.bot: discord.Client = passed_bot
+        self.bot: Bot = passed_bot
         self.plot_semaphore = asyncio.Semaphore(3)
+
 
     async def cog_load(self) -> None:
         self.startup.start()
 
 
     @tasks.loop(count=1)
+    @handle_loop_errors(logger=logger)
     async def startup(self):
-        pass
+        self.bot.loop.create_task(self.handle_graids_loop())
+
+    async def handle_graids_loop(self):
+        while True:
+            try:
+                data = await self.bot.state.graid_queue.get()
+                await handle_graids(self.bot, data)
+                self.bot.state.graid_queue.task_done()
+            except Exception as e: #pylint: disable=broad-exception-caught
+                excepts.handle_error(error=e, logger=logger)
+
 
     @app_commands.command(name="set_aspects_rewarded")
     async def reward_aspects(self, interaction: discord.Interaction):
@@ -221,22 +255,11 @@ class AspectRewardModal(discord.ui.Modal, title="Aspects rewarded in-game"):
             await interaction.response.send_message(message, ephemeral=True, delete_after=0)
 
 
-def init_database(database_path: str = ".\\persistent_data\\guild_api_database.db"):
-    global meta, members_db, member_guild_raids_db # pylint: disable=global-variable-undefined
-
-    p = database_path
-
-    meta = db.MetaTable(p)
-
-    members_db = db.UpdatingTable('members', p)
-    
-    member_guild_raids_db = db.UpdatingTable('member_guild_raids', p)
-
 
 def main(global_bot):
     global graids_cog # pylint: disable=global-variable-undefined
-    graids_cog = GraidsCog(passed_bot=global_bot)
     init_database()
+    graids_cog = GraidsCog(passed_bot=global_bot)
 
 
 

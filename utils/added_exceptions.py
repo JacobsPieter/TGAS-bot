@@ -1,18 +1,29 @@
 from __future__ import annotations
+import logging
+from functools import wraps
 
 from typing import Any
 
 
-def handle_error(error: Exception):
-    if isinstance(error, DatabaseException):
-        #logger.warning(error)
-        pass
+def handle_error(error: Exception, logger: logging.Logger):
+    if isinstance(error, BotBaseException):
+        logger.warning(msg=error.message)
+        return
 
-    if isinstance(error, DiscordAPIException):
-        #logger.warning(error)
-        pass
+    logger.exception(msg="Unhandled error:", exc_info=error)
 
-    #logger.exception("Unhandled error", exc_info=error)
+
+def handle_loop_errors(logger: logging.Logger):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            try:
+                return await func(*args, **kwargs)
+            except Exception as e: #pylint: disable=broad-exception-caught
+                handle_error(error=e, logger=logger)
+
+        return wrapper
+    return decorator
 
 
 class BotBaseException(Exception):
@@ -20,6 +31,8 @@ class BotBaseException(Exception):
     Base exception for the bot, all exceptions should inherit from here
     """
 
+    def __init__(self, message:str):
+        self.message = message
 
 
 class DatabaseException(BotBaseException):
@@ -36,8 +49,7 @@ class DatabaseException(BotBaseException):
     """
 
     def __init__(self, message: str):
-        # logger.error(message)
-        super().__init__(message)
+        super().__init__(message=message)
 
 class GuildNotConfiguredError(DatabaseException):
     """
@@ -47,7 +59,7 @@ class GuildNotConfiguredError(DatabaseException):
 
     def __init__(self):
         super().__init__(
-            "No guild ID has been configured in the database."
+            message="No guild ID has been configured in the database."
         )
 
 class ChannelNotConfiguredError(DatabaseException):
@@ -60,7 +72,7 @@ class ChannelNotConfiguredError(DatabaseException):
         self.channel = channel
 
         super().__init__(
-            f"Channel '{channel.name}' has not been configured."
+            message=f"Channel '{channel.name}' has not been configured."
         )   
 
 class MessageNotConfiguredError(DatabaseException):
@@ -73,7 +85,7 @@ class MessageNotConfiguredError(DatabaseException):
         self.message = message
 
         super().__init__(
-            f"Message '{message.name}' has not been configured."
+            message=f"Message '{message.name}' has not been configured."
         )
 
 class RoleNotConfiguredError(DatabaseException):
@@ -86,7 +98,7 @@ class RoleNotConfiguredError(DatabaseException):
         self.role = role
 
         super().__init__(
-            f"Role '{role.name}' has not been configured."
+            message=f"Role '{role.name}' has not been configured."
         )
 
 
@@ -104,8 +116,7 @@ class DiscordAPIException(BotBaseException):
     """
 
     def __init__(self, message: str):
-        # logger.error(message)
-        super().__init__(message)
+        super().__init__(message=message)
 
 class GuildNotFoundError(DiscordAPIException):
     """
@@ -117,7 +128,7 @@ class GuildNotFoundError(DiscordAPIException):
         self.guild_id = guild_id
 
         super().__init__(
-            f"Guild with ID {guild_id} could not be found {'in cache.' if in_cache else '.'}"
+            message=f"Guild with ID {guild_id} could not be found {'in cache.' if in_cache else '.'}"
         )
 
 class ChannelNotFoundError(DiscordAPIException):
@@ -131,7 +142,7 @@ class ChannelNotFoundError(DiscordAPIException):
         self.channel_id = channel_id
 
         super().__init__(
-            f"Channel '{channel.name}' "
+            message=f"Channel '{channel.name}' "
             f"(ID {channel_id}) could not be found."
         )
 
@@ -146,7 +157,7 @@ class MessageNotFoundError(DiscordAPIException):
         self.message_id = message_id
 
         super().__init__(
-            f"Message '{message.name}' "
+            message=f"Message '{message.name}' "
             f"(ID {message_id}) could not be found."
         )
 
@@ -161,7 +172,7 @@ class RoleNotFoundError(DiscordAPIException):
         self.role_id = role_id
 
         super().__init__(
-            f"Role '{role.name}' "
+            message=f"Role '{role.name}' "
             f"(ID {role_id}) could not be found."
         )
 

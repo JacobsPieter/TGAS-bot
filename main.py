@@ -1,11 +1,14 @@
 import os
-import discord
-from discord.ext import commands
-from dotenv import load_dotenv
 import datetime
+import logging
+
+import discord
+from dotenv import load_dotenv
 
 import utils.added_exceptions as excepts
-import cogs.database as db
+import utils.logger as log
+import utils.database as db
+import utils.bot as bot_class
 
 load_dotenv()
 
@@ -16,46 +19,12 @@ allowed_mentions = discord.AllowedMentions(users=True, roles=True)
 TOKEN: str = os.getenv("BOT_TOKEN") #type: ignore
 
 
-class Bot(commands.Bot):
-    def __init__(self):
-        intents = discord.Intents.default()
-        intents.members = True
-        intents.guilds = True
-        intents.messages = True
-        intents.message_content = True
-
-        super().__init__(
-            command_prefix="!",
-            intents=intents
-        )
-
-    async def setup_hook(self):
-        print("🔧 setup_hook: loading extensions")
-
-        await load_cogs(self)
-
-        print("🔧 setup_hook: extensions loaded")
-
-    async def on_ready(self):
-        print(f"✅ Logged in as {self.user}")
-        await self.tree.sync()
-
-
-async def load_cogs(bot):
-    extensions = [
-    "cogs.anni_party",
-    "cogs.random_gambling_messages",
-    "cogs.api_depending.api_queries",
-    "cogs.api_depending.tome_requesting",
-    "cogs.api_depending.graid_tracking"
-    ]
-    for ext in extensions:
-        await bot.load_extension(ext)
-
 
 
 def init_database(database_path: str = ".\\persistent_data\\guild_api_database.db"):
     global meta, members_db, member_guild_raids_db, tome_requested_db, playtime_tracking_db # pylint: disable=global-variable-undefined
+
+    logger.info(msg='Initialising the database...')
 
     p = database_path
 
@@ -63,6 +32,7 @@ def init_database(database_path: str = ".\\persistent_data\\guild_api_database.d
     general_database_operations_object = db.Database(p)
     general_database_operations_object.run_migrations()
 
+    logger.info(msg="Creating tables if they don't exist yet...")
 
     meta = db.MetaTable(p)
     meta.create()
@@ -116,20 +86,29 @@ def init_database(database_path: str = ".\\persistent_data\\guild_api_database.d
         }
     )
 
-def main():
-    global global_bot # pylint: disable=global-variable-undefined
-    bot = Bot()
-    global_bot = bot
-    bot.run(TOKEN)
+    logger.info(msg="Database initalisation done")
 
 
 
-if __name__ == '__main__':
-    main()
 
-@global_bot.tree.error
+
+log.init_logging()
+logger = logging.getLogger(__name__)
+logger.info(msg='Starting bot...')
+init_database()
+bot = bot_class.Bot()
+
+
+@bot.tree.error
 async def error_handling(interaction: discord.Interaction, error):
     if not interaction.response.is_done():
-        await interaction.response.send_message('An error occured', ephemeral=True)
-    excepts.handle_error(error)
+        await interaction.response.send_message(content='An error occured', ephemeral=True)
+    else:
+        await interaction.followup.send(content="An error has occured while processing the command", ephemeral=True)
+    module = interaction.__module__
+    local_logger = logging.getLogger(name=module)
+    excepts.handle_error(error=error, logger=local_logger)
 
+
+
+bot.run(TOKEN)

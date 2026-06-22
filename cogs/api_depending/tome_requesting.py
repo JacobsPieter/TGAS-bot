@@ -1,13 +1,16 @@
 import datetime
+import logging
 
 import discord
 from discord.ext import commands, tasks
-from discord import ui
-from discord import app_commands
+from discord import ui, app_commands
 
-import cogs.database as db
+import utils.database as db
 import utils.discordutils as dc_utils
 import utils.added_exceptions as excepts
+from utils.added_exceptions import handle_loop_errors
+
+logger = logging.getLogger(name=__name__)
 
 
 def init_database(database_path: str = ".\\persistent_data\\guild_api_database.db"):
@@ -32,6 +35,7 @@ class TomesCog(commands.Cog):
 
 
     @tasks.loop(count=1)
+    @handle_loop_errors(logger=logger)
     async def startup(self):
         self.guild = dc_utils.get_guild(client=self.bot, meta_db=meta)
         self.tome_update_looping.start()
@@ -59,6 +63,7 @@ class TomesCog(commands.Cog):
             self.tome_update_looping.start()
     
     @tasks.loop(minutes=2)
+    @handle_loop_errors(logger=logger)
     async def tome_update_looping(self):
         try:
             guild = dc_utils.get_guild(self.bot, meta)

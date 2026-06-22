@@ -1,6 +1,6 @@
 import datetime
 import re
-import cogs.database as db
+import utils.database as db
 import discord
 import utils.added_exceptions as excepts
 

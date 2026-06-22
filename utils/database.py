@@ -117,7 +117,7 @@ class Table(Database):
         rows = self.cursor.fetchall()
 
         fetched_list = [{column_name: row[column_name] for column_name in row.keys()} for row in rows]
-
+        
         return fetched_list
     
 

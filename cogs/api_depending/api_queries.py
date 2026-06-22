@@ -5,6 +5,8 @@ import json
 import datetime
 import asyncio
 from itertools import pairwise, dropwhile
+import logging
+
 
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -15,12 +17,15 @@ import discord
 from discord import app_commands
 from discord.ext import tasks, commands
 
-import cogs.database as db
-import cogs.api_depending.graid_tracking as graid_tracking
+
+import utils.database as db
 import utils.discordutils as dc_utils
 import utils.added_exceptions as excepts
+from utils.added_exceptions import handle_loop_errors
 import utils.general_classes as classes
+from utils.bot import Bot
 
+logger = logging.getLogger(name=__name__)
 
 class APIHandler:
     WYNN_API_BASE_URL = "https://api.wynncraft.com/v3/"
@@ -92,7 +97,7 @@ def init_database(database_path: str = ".\\persistent_data\\guild_api_database.d
 
 class APIQueries(commands.Cog):
     def __init__(self, passed_bot):
-        self.bot: discord.Client = passed_bot
+        self.bot: Bot = passed_bot
         self.plot_semaphore = asyncio.Semaphore(3)
 
 
@@ -101,15 +106,18 @@ class APIQueries(commands.Cog):
         print("Loop for querying the WynnAPI has been started.")
 
     async def cog_load(self) -> None:
-        asyncio.create_task(api_queries.start_loop())
-
         self.startup.start()
 
 
     @tasks.loop(count=1)
+    @handle_loop_errors(logger=logger)
     async def startup(self):
 
         await self.bot.wait_until_ready()
+
+        self.fetch_guild_endpoint.start()
+
+        self.update_playtime_loop.start()
 
         guild = dc_utils.get_guild(self.bot, meta)
 
@@ -121,27 +129,27 @@ class APIQueries(commands.Cog):
                 guild = await self.bot.fetch_guild(guild_id)
             except discord.NotFound as e:
                 raise excepts.GuildNotFoundError(guild_id=guild_id) from e
+        
 
-        self.update_playtime_loop.start()
+        
 
 
     @tasks.loop(minutes=2)
+    @handle_loop_errors(logger=logger)
     async def fetch_guild_endpoint(self):
-        try:
-            data = await api_handler.get_endpoint_data(api_handler.construct_guild_endpoint_url())
+        data = await api_handler.get_endpoint_data(api_handler.construct_guild_endpoint_url())
+        
+        await self.bot.state.graid_queue.put(data)
 
-            await graid_tracking.handle_graids(bot=self.bot, data=data)
 
-            for rank, rank_members in data['members'].items():
-                if not rank in {"owner", "chief", "strategist", "captain", "recruiter", "recruit"}: # all guild ranks, will need updating in case of update
+        for rank, rank_members in data['members'].items():
+            if not rank in {"owner", "chief", "strategist", "captain", "recruiter", "recruit"}: # all guild ranks, will need updating in case of update
+                continue
+            for guild_member, member_data in rank_members.items():
+                member = classes.APIMember(member=guild_member, memberdata=member_data, rank=rank, db=members_db)
+                if member.total_guild_raids is None:
                     continue
-                for guild_member, member_data in rank_members.items():
-                    member = classes.APIMember(member=guild_member, memberdata=member_data, rank=rank, db=members_db)
-                    if member.total_guild_raids is None:
-                        continue
-                    member.update_member_database()
-        except: # pylint: disable=bare-except
-            return
+                member.update_member_database()
     
     @fetch_guild_endpoint.before_loop
     async def fetch_guild_endpoint_before_loop(self):
@@ -197,6 +205,7 @@ class APIQueries(commands.Cog):
 
 
     @tasks.loop(hours=2)
+    @handle_loop_errors(logger=logger)
     async def update_playtime_loop(self):
         try:
             members = members_db.fetchall()
