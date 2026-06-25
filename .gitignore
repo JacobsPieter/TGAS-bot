@@ -11,7 +11,7 @@ testing
 
 *.db
 
-TODO.md
+cogs/api_depending/TODO.md
 api_database.py
 
 main.spec
