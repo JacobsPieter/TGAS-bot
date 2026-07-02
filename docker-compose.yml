@@ -11,5 +11,5 @@ services:
       - /mnt/nas/Pieter/2_discord_bot/TGAS_bot/persistent_data:/app/persistent_data
     
     env_file:
-      - /mnt/nas/Pieter/2_discord_bot/TGAS_bot/stack.env
+      - /opt/discordbot/stack.env
   
