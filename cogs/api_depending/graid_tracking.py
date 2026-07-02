@@ -13,6 +13,7 @@ import utils.discordutils as dc_utils
 import utils.added_exceptions as excepts
 from utils.added_exceptions import handle_loop_errors
 from utils.bot import Bot
+import utils.paths as paths
 
 
 
@@ -20,7 +21,7 @@ from utils.bot import Bot
 
 logger = logging.getLogger(name=__name__)
 
-def init_database(database_path: str = ".\\persistent_data\\guild_api_database.db"):
+def init_database(database_path: str = paths.DATABASE):
     global meta, members_db, member_guild_raids_db # pylint: disable=global-variable-undefined
 
     p = database_path
@@ -36,7 +37,6 @@ def init_database(database_path: str = ".\\persistent_data\\guild_api_database.d
 class GraidsCog(commands.Cog):
     def __init__(self, passed_bot):
         self.bot: Bot = passed_bot
-        self.plot_semaphore = asyncio.Semaphore(3)
 
 
     async def cog_load(self) -> None:

@@ -9,11 +9,12 @@ import utils.database as db
 import utils.discordutils as dc_utils
 import utils.added_exceptions as excepts
 from utils.added_exceptions import handle_loop_errors
+import utils.paths as paths
 
 logger = logging.getLogger(name=__name__)
 
 
-def init_database(database_path: str = ".\\persistent_data\\guild_api_database.db"):
+def init_database(database_path: str = paths.DATABASE):
     global meta, members_db, tome_requested_db # pylint: disable=global-variable-undefined
 
     p = database_path

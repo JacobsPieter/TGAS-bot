@@ -88,7 +88,8 @@ class Table(Database):
             name: str,
             primary_key: tuple[str, Database.DBKeyType],
             columns: dict[str, Database.DBKeyType],
-            autoincrement: bool = False
+            autoincrement: bool = False,
+            extra_sql: str | None = None
             ):
     
         creation_text: str = f"CREATE TABLE IF NOT EXISTS {name}"
@@ -103,6 +104,9 @@ class Table(Database):
             keys.append(column_text)
 
         table_creation_text = f"{creation_text} (\n    {",\n    ".join(keys)}\n)"
+
+        if not extra_sql is None:
+            table_creation_text += extra_sql
 
         self.cursor.execute(table_creation_text)
         
@@ -164,7 +168,8 @@ class TrackingTable(Table):
    
     def create(
             self,
-            columns: dict[str, Database.DBInputType]
+            columns: dict[str, Database.DBInputType],
+            extra_sql: str | None = None
             ):
         
         columns["timestamp"] = datetime.datetime.now()
@@ -173,7 +178,7 @@ class TrackingTable(Table):
         for column_name, column_type in columns.items():
             typed_columns[column_name] = self.convert_db_types(column_type)[1]
         
-        return super()._create_table(name=self.name, primary_key=("id", Database.DBKeyType.INT), columns=typed_columns, autoincrement=True)
+        return super()._create_table(name=self.name, primary_key=("id", Database.DBKeyType.INT), columns=typed_columns, autoincrement=True, extra_sql=extra_sql)
     
 
     def fetchlast(self):

@@ -24,6 +24,7 @@ import utils.added_exceptions as excepts
 from utils.added_exceptions import handle_loop_errors
 import utils.general_classes as classes
 from utils.bot import Bot
+import utils.paths as paths
 
 logger = logging.getLogger(name=__name__)
 
@@ -80,7 +81,7 @@ class APIHandler:
 
 
 
-def init_database(database_path: str = ".\\persistent_data\\guild_api_database.db"):
+def init_database(database_path: str = paths.DATABASE):
     global meta, members_db, playtime_tracking_db # pylint: disable=global-variable-undefined
 
     p = database_path

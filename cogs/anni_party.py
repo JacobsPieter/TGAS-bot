@@ -46,6 +46,8 @@ import discord
 from discord.ext import tasks, commands
 from discord import app_commands
 
+import utils.paths as paths
+
 
 load_dotenv()
 
@@ -57,7 +59,7 @@ TEAM_SIZE = 10  # Maximum players per party
 # ------------------ DB ------------------
 def init_database():
     global db_lock, conn, cursor #pylint: disable=global-variable-undefined
-    conn = sqlite3.connect("persistent_data\\anni_party.db", check_same_thread=False)
+    conn = sqlite3.connect(paths.ANNI_PARTY_DATABASE, check_same_thread=False)
     cursor = conn.cursor()
 
     cursor.execute("""

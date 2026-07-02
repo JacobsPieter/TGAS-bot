@@ -9,6 +9,7 @@ import utils.added_exceptions as excepts
 import utils.logger as log
 import utils.database as db
 import utils.bot as bot_class
+import utils.paths as paths
 
 load_dotenv()
 
@@ -21,7 +22,7 @@ TOKEN: str = os.getenv("BOT_TOKEN") #type: ignore
 
 
 
-def init_database(database_path: str = ".\\persistent_data\\guild_api_database.db"):
+def init_database(database_path: str = paths.DATABASE):
     global meta, members_db, member_guild_raids_db, tome_requested_db, playtime_tracking_db # pylint: disable=global-variable-undefined
 
     logger.info(msg='Initialising the database...')
@@ -84,6 +85,24 @@ def init_database(database_path: str = ".\\persistent_data\\guild_api_database.d
             'uuid': str(),
             'playtime': float()
         }
+    )
+
+    annihilation_parties_db = db.TrackingTable('annihilation_parties', p)
+    annihilation_parties_db.create(
+        columns={
+            'discord_id': str(),
+            'anni_id': int(),
+            'server_region': str(),
+            'weapon': str(),
+            'archetype': str(),
+            'build_link': str(),
+            'sure': bool(),
+            'can_host': bool(),
+            'current_host': bool(),
+            'in_guild': bool(),
+            'current_party_id': int()
+        },
+        extra_sql='UNIQUE(discord_id, anni_id)'
     )
 
     logger.info(msg="Database initalisation done")

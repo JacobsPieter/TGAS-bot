@@ -1,0 +1,14 @@
+services:
+
+  discordbot:
+    build: .
+
+    container_name: TGAS_bot
+
+    restart: unless-stopped
+
+    volumes:
+      - /mnt/nas/Pieter/2_discord_bot/TGAS_bot/persistent_data:app/persistent_data
+
+    env_file:
+      - /mnt/nas/Pieter/2_discord_bot/TGAS_bot/.env
