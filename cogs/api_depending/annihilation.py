@@ -78,7 +78,7 @@ class AnnihilationView(discord.ui.LayoutView):
         )
 
 
-async def setup(bot):
-    annihilation_cog = AnnihilationCog(bot=bot)
-    init_database()
-    await bot.add_cog(annihilation_cog)
+# async def setup(bot):
+#     annihilation_cog = AnnihilationCog(bot=bot)
+#     init_database()
+#     await bot.add_cog(annihilation_cog)
