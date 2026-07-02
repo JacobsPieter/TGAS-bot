@@ -10,6 +10,7 @@ services:
     volumes:
       - /mnt/nas/Pieter/2_discord_bot/TGAS_bot/persistent_data:/app/persistent_data
     
-    env_file:
-      - /opt/discordbot/stack.env
+    environment:
+      BOT_TOKEN: ${BOT_TOKEN}
+      WYNN_API_TOKEN: ${WYNN_API_TOKEN}
   
