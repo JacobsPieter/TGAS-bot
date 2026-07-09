@@ -2,6 +2,9 @@ import logging
 import sys
 import datetime
 
+import utils.paths as path
+
+
 def init_logging():
     date = datetime.datetime.now(tz=datetime.timezone.utc)
     filename = date.strftime("bot_log_%Y-%m-%dT%H_%M_%SZ")
@@ -11,7 +14,7 @@ def init_logging():
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
         handlers=[
             logging.StreamHandler(sys.stdout),
-            logging.FileHandler(f"logs\\{filename}.log", encoding="utf-8")
+            logging.FileHandler(f"{path.LOG_DIR}\\{filename}.log", encoding="utf-8")
         ]
     )
 

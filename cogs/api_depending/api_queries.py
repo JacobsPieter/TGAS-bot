@@ -8,8 +8,8 @@ from itertools import pairwise, dropwhile
 import logging
 
 
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-from matplotlib.figure import Figure
+# from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+# from matplotlib.figure import Figure
 
 import requests
 
@@ -81,7 +81,7 @@ class APIHandler:
 
 
 
-def init_database(database_path: str = paths.DATABASE):
+def init_database(database_path = paths.DATABASE):
     global meta, members_db, playtime_tracking_db # pylint: disable=global-variable-undefined
 
     p = database_path
@@ -157,51 +157,51 @@ class APIQueries(commands.Cog):
         await self.bot.wait_until_ready()
 
 
-    @app_commands.command(name='get_user_playtime_graph')
-    async def get_user_playtime_graph(self, interaction: discord.Interaction, member: discord.Member):
-        await interaction.response.defer()
-        async with self.plot_semaphore:
-            member_to_get = member.display_name
-            member_db_res = members_db.fetchall_conditional(f'username = \'{member_to_get}\'')
-            if member_db_res is None:
-                return await interaction.followup.send(content='Please ask this for someone in the guild or check your input. I don\'t have data for non-guild members')
-            uuid = member_db_res[0]['uuid']
-            playtime_history = playtime_tracking_db.fetchall_conditional(f'uuid = \'{uuid}\' ORDER BY timestamp DESC')
-            hour_time = datetime.timedelta(hours=2).total_seconds()
-            playtime_history.sort(key=lambda r: r['timestamp'])
-            playtime_history_cleaned = [{'timestamp': snapshot['timestamp'], 'playtime': snapshot['playtime']} for snapshot in playtime_history]
-            if not playtime_history_cleaned:
-                return await interaction.followup.send("Not enough data yet.")
+    # @app_commands.command(name='get_user_playtime_graph')
+    # async def get_user_playtime_graph(self, interaction: discord.Interaction, member: discord.Member):
+    #     await interaction.response.defer()
+    #     async with self.plot_semaphore:
+    #         member_to_get = member.display_name
+    #         member_db_res = members_db.fetchall_conditional(f'username = \'{member_to_get}\'')
+    #         if member_db_res is None:
+    #             return await interaction.followup.send(content='Please ask this for someone in the guild or check your input. I don\'t have data for non-guild members')
+    #         uuid = member_db_res[0]['uuid']
+    #         playtime_history = playtime_tracking_db.fetchall_conditional(f'uuid = \'{uuid}\' ORDER BY timestamp DESC')
+    #         hour_time = datetime.timedelta(hours=2).total_seconds()
+    #         playtime_history.sort(key=lambda r: r['timestamp'])
+    #         playtime_history_cleaned = [{'timestamp': snapshot['timestamp'], 'playtime': snapshot['playtime']} for snapshot in playtime_history]
+    #         if not playtime_history_cleaned:
+    #             return await interaction.followup.send("Not enough data yet.")
 
-            playtime_history_filled_in: list[dict[str, float]] = []
-            for point1, point2 in pairwise(playtime_history_cleaned):
-                if point2['timestamp'] - point1['timestamp'] >= hour_time + 60: # Giving a little bit of wiggle room
-                    for e in range(math.floor((point2['timestamp'] - point1['timestamp']) // hour_time)):
-                        playtime_history_filled_in.append(
-                            {
-                                'timestamp': point1['timestamp'] + e*hour_time,
-                                'playtime': point1['playtime']
-                            }
-                        )
-                    continue
-                playtime_history_filled_in.append(point1)
-            playtime_history_filled_in.append(playtime_history_cleaned[-1])
-            playtime_history_diffs = [{'timestamp': snapshot['timestamp'], 'playtime': snapshot['playtime'] - playtime_history_filled_in[i]['playtime']} for i, snapshot in enumerate(playtime_history_filled_in[1:], start=0)]
+    #         playtime_history_filled_in: list[dict[str, float]] = []
+    #         for point1, point2 in pairwise(playtime_history_cleaned):
+    #             if point2['timestamp'] - point1['timestamp'] >= hour_time + 60: # Giving a little bit of wiggle room
+    #                 for e in range(math.floor((point2['timestamp'] - point1['timestamp']) // hour_time)):
+    #                     playtime_history_filled_in.append(
+    #                         {
+    #                             'timestamp': point1['timestamp'] + e*hour_time,
+    #                             'playtime': point1['playtime']
+    #                         }
+    #                     )
+    #                 continue
+    #             playtime_history_filled_in.append(point1)
+    #         playtime_history_filled_in.append(playtime_history_cleaned[-1])
+    #         playtime_history_diffs = [{'timestamp': snapshot['timestamp'], 'playtime': snapshot['playtime'] - playtime_history_filled_in[i]['playtime']} for i, snapshot in enumerate(playtime_history_filled_in[1:], start=0)]
 
             
-            hourly_playtime_history = [{'timestamp': datetime.datetime.fromtimestamp(snapshot['timestamp']), 'playtime': round(snapshot['playtime'], 1)} for snapshot in playtime_history_diffs]
-            indexes = [snapshot['timestamp'] for snapshot in hourly_playtime_history]
-            values = [snapshot['playtime'] for snapshot in hourly_playtime_history]
+    #         hourly_playtime_history = [{'timestamp': datetime.datetime.fromtimestamp(snapshot['timestamp']), 'playtime': round(snapshot['playtime'], 1)} for snapshot in playtime_history_diffs]
+    #         indexes = [snapshot['timestamp'] for snapshot in hourly_playtime_history]
+    #         values = [snapshot['playtime'] for snapshot in hourly_playtime_history]
 
-            path = f".\\temp_data\\player_activity_chart_{interaction.id}.png"
-            await render_chart_async(indexes, values, width=1/(13), title="Twohourly Playtime", output_path=path)
+    #         path = f".\\temp_data\\player_activity_chart_{interaction.id}.png"
+    #         await render_chart_async(indexes, values, width=1/(13), title="Twohourly Playtime", output_path=path)
 
-            try:
-                await interaction.followup.send(file=discord.File(path))
-            except discord.NotFound:
-                return
-            finally:
-                await asyncio.to_thread(os.remove, path)
+    #         try:
+    #             await interaction.followup.send(file=discord.File(path))
+    #         except discord.NotFound:
+    #             return
+    #         finally:
+    #             await asyncio.to_thread(os.remove, path)
 
 
 
@@ -229,52 +229,52 @@ class APIQueries(commands.Cog):
 
 
 
-def generate_bar_chart(x, y, width, title: str):
-    fig = Figure()
-    FigureCanvas(fig)
+# def generate_bar_chart(x, y, width, title: str):
+#     fig = Figure()
+#     FigureCanvas(fig)
 
-    ax = fig.add_subplot(111)
-    ax.bar(x, y, width=width)
+#     ax = fig.add_subplot(111)
+#     ax.bar(x, y, width=width)
 
-    ax.set_title(title)
-    ax.tick_params(axis='x', labelrotation=45)
+#     ax.set_title(title)
+#     ax.tick_params(axis='x', labelrotation=45)
 
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+#     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    ax.text(
-        0.99, 0.01,
-        f"{timestamp}",
-        transform=ax.transAxes,
-        ha='right',
-        va='bottom',
-        fontsize=8,
-        alpha=0.7
-    )
+#     ax.text(
+#         0.99, 0.01,
+#         f"{timestamp}",
+#         transform=ax.transAxes,
+#         ha='right',
+#         va='bottom',
+#         fontsize=8,
+#         alpha=0.7
+#     )
 
-    fig.tight_layout()
+#     fig.tight_layout()
 
-    return fig
-
-
-async def render_chart_async(x, y, width, title: str, output_path):
-    fig = await asyncio.to_thread(generate_bar_chart, x, y, width, title)
-
-    # save in background thread (IMPORTANT: blocking operation)
-    await asyncio.to_thread(fig.savefig, output_path, bbox_inches="tight", dpi=150)
-
-    # explicit cleanup
-    await asyncio.to_thread(fig.clf)
-    del fig
-
-    return output_path
+#     return fig
 
 
-def skip_until_threshold(data, key, threshold):
-    if not data:
-        return []
+# async def render_chart_async(x, y, width, title: str, output_path):
+#     fig = await asyncio.to_thread(generate_bar_chart, x, y, width, title)
 
-    limit = data[0][key] + threshold
-    return list(dropwhile(lambda d: d[key] < limit, data))
+#     # save in background thread (IMPORTANT: blocking operation)
+#     await asyncio.to_thread(fig.savefig, output_path, bbox_inches="tight", dpi=150)
+
+#     # explicit cleanup
+#     await asyncio.to_thread(fig.clf)
+#     del fig
+
+#     return output_path
+
+
+# def skip_until_threshold(data, key, threshold):
+#     if not data:
+#         return []
+
+#     limit = data[0][key] + threshold
+#     return list(dropwhile(lambda d: d[key] < limit, data))
 
 
 

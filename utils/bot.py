@@ -39,10 +39,10 @@ class Bot(commands.Bot):
 
         extensions = [
         "cogs.anni_party",
-        "cogs.random_gambling_messages",
+        #"cogs.random_gambling_messages",
         "cogs.api_depending.api_queries",
         "cogs.api_depending.tome_requesting",
-        "cogs.api_depending.graid_tracking"
+        #"cogs.api_depending.graid_tracking"
         ]
 
         for ext in extensions:

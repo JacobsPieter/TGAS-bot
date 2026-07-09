@@ -22,12 +22,12 @@ TOKEN: str = os.getenv("BOT_TOKEN") #type: ignore
 
 
 
-def init_database(database_path: str = paths.DATABASE):
+def init_database(database_path = paths.DATABASE):
     global meta, members_db, member_guild_raids_db, tome_requested_db, playtime_tracking_db # pylint: disable=global-variable-undefined
 
     logger.info(msg='Initialising the database...')
 
-    p = database_path
+    p = str(database_path)
 
 
     general_database_operations_object = db.Database(p)

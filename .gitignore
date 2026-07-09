@@ -18,4 +18,4 @@ main.spec
 
 build
 dist
-logs/*
+persistent_data/logs/*

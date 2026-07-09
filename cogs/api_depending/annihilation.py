@@ -13,7 +13,7 @@ import utils.paths as paths
 logger = logging.getLogger(name=__name__)
 
 
-def init_database(database_path: str = paths.DATABASE):
+def init_database(database_path = paths.DATABASE):
     global meta # pylint: disable=global-variable-undefined
 
     p = database_path
