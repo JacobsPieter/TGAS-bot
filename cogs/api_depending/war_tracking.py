@@ -172,6 +172,7 @@ def create_payout_message(guild: discord.Guild) -> str:
     to_return_string = ''
     member_wars_db_res = member_wars_db.fetchall()
     members_with_wars = [member for member in member_wars_db_res if member['payout'] - member['backlog'] > 0]
+    members_with_wars.sort(key=lambda member: member["payout"] - member["backlog"], reverse=True)
     for member in members_with_wars:
         done_wars = member['total'] - member['total_before_last_payout']
         mentioned_member = dc_utils.mention_user(member['uuid'], guild, members_db)
