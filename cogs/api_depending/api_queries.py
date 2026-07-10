@@ -141,13 +141,16 @@ class APIQueries(commands.Cog):
         data = await api_handler.get_endpoint_data(api_handler.construct_guild_endpoint_url())
         
         await self.bot.state.graid_queue.put(data)
+        await self.bot.state.war_queue.put(data)
+        await self.bot.state.graid_queue.join()
+        await self.bot.state.war_queue.join()
 
 
         for rank, rank_members in data['members'].items():
             if not rank in {"owner", "chief", "strategist", "captain", "recruiter", "recruit"}: # all guild ranks, will need updating in case of update
                 continue
             for guild_member, member_data in rank_members.items():
-                member = classes.APIMember(member=guild_member, memberdata=member_data, rank=rank, db=members_db)
+                member = classes.APIMember(member=guild_member, memberdata=member_data, rank=rank, database=members_db)
                 if member.total_guild_raids is None:
                     continue
                 member.update_member_database()

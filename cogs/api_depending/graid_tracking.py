@@ -84,12 +84,12 @@ async def handle_graids(bot: discord.Client, data):
         if not rank in {"owner", "chief", "strategist", "captain", "recruiter", "recruit"}: # all guild ranks, will need updating in case of update
             continue
         for guild_member, member_data in rank_members.items():
-            member = classes.APIMember(member=guild_member, memberdata=member_data, rank=rank, db=db)
+            member = classes.APIMember(member=guild_member, memberdata=member_data, rank=rank, database=member_guild_raids_db)
             if previous_members.get(guild_member) is None and not member.total_guild_raids is None:
                 member.update_member_guild_raids()
                 continue
             if member.total_guild_raids is None:
-                print(member.username)
+                #print(member.username)
                 continue
             if previous_members[guild_member]['total_guild_raids'] < member.total_guild_raids:
                 player_completed_raids = get_completed_graids(member=member)

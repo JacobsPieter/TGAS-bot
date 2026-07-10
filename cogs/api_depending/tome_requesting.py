@@ -67,8 +67,7 @@ class TomesCog(commands.Cog):
     @handle_loop_errors(logger=logger)
     async def tome_update_looping(self):
         try:
-            guild = dc_utils.get_guild(self.bot, meta)
-            await update_tome_live_message(guild)
+            await update_tome_live_message(self.guild)
         except: # pylint: disable=bare-except
             return
 

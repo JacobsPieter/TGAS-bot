@@ -1,12 +1,13 @@
 import datetime
+import utils.database as db
 
 
 class APIMember:
-    def __init__(self, member, memberdata, rank, db):
+    def __init__(self, member, memberdata, rank, database: db.UpdatingTable):
         self.uuid = member
         self.username = memberdata['username']
         self.guild_rank = rank
-        self.db = db
+        self.db = database
 
         if not memberdata['lastJoin'] is None:
             self.last_online = datetime.datetime.fromisoformat(memberdata['lastJoin'].replace("Z", "+00:00"))
@@ -24,13 +25,13 @@ class APIMember:
             self.wars = memberdata['globalData'].get('wars', 0)
         else:
             self.playtime = None
-            self.total_guild_raids = None
+            self.total_guild_raids = 0
             self.notg_completions = None
             self.nol_completions = None
             self.tcc_completions = None
             self.tna_completions = None
             self.wtp_completions = None
-            self.wars = None
+            self.wars = 0
         
         if not memberdata['restrictions']['guild_high_ranked_access']:
             self.weekly = memberdata['weekly']['completed']
@@ -45,6 +46,14 @@ class APIMember:
         self.left_guild = False
 
     def update_member_database(self):
+        prev_db_res = self.db.fetchone('uuid', self.uuid)
+        if not prev_db_res is None:
+            prev_total_graids: int = prev_db_res['total_guild_raids']
+            prev_total_wars: int = prev_db_res['wars']
+        else:
+            prev_total_graids = 0
+            prev_total_wars = 0
+
         self.db.update(
             'uuid',
             self.uuid,
@@ -59,8 +68,8 @@ class APIMember:
                 'contribution_rank': self.contribution_rank,
                 'joined_guild': self.joined_guild,
                 'left_guild': self.left_guild,
-                'total_guild_raids': self.total_guild_raids,
-                'wars': self.wars
+                'total_guild_raids': self.total_guild_raids if prev_total_graids <= self.total_guild_raids else prev_total_graids,
+                'wars': self.wars if prev_total_wars <= self.wars else prev_total_wars
             })
 
     def update_member_guild_raids(self):

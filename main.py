@@ -72,6 +72,17 @@ def init_database(database_path = paths.DATABASE):
         }
         )
     
+    member_wars_db = db.UpdatingTable('member_wars', p)
+    member_wars_db.create(
+        ('uuid', str()),
+        {
+            'total': int(),
+            'total_before_last_payout': int(),
+            'payout': int(),
+            'backlog': int()
+        }
+    )
+    
     tome_requested_db = db.TrackingTable('tome_requested', p)
     tome_requested_db.create(
         columns={

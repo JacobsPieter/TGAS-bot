@@ -3,8 +3,20 @@ import re
 import utils.database as db
 import discord
 import utils.added_exceptions as excepts
+from enum import Enum
 
 DISCORD_CHANNEL_TYPES = discord.TextChannel | discord.ForumChannel | discord.CategoryChannel
+
+class DiscordTimestampForms(Enum):
+    SHORT_TIME = 't'
+    MEDIUM_TIME = 'T'
+    SHORT_DATE = 'd'
+    LONG_DATE = 'D'
+    LONG_DATE_SHORT_TIME = 'f'
+    FULL_DATE_SHORT_TIME = 'F'
+    SHORT_DATE_SHORT_TIME = 's'
+    SHORT_DATE_MEDIUM_TIME = 'S'
+    RELATIVE_TIME = 'R'
 
 
 def get_player_username(player_uuid: str, members_db: db.UpdatingTable) -> str:
@@ -98,3 +110,6 @@ def parse_discord_timestamps(string: str) -> datetime.datetime:
     timestamp = datetime.datetime.fromtimestamp(timestamp=int(match.group(1)))
     return timestamp
 
+def send_discord_timestamps(date_time: datetime.datetime, form: DiscordTimestampForms) -> str:
+    return_string = f'<t:{int(date_time.timestamp())}:{form}'
+    return return_string

@@ -398,6 +398,7 @@ class MetaTable:
         #           ANNIHILATION_PARTIES_SIGNUP_LIVE = 'annihilation_parties_signup_live_channel_id'
         WYNNAPI_GRAIDS_TRACKING_SEND  = 'wynnapi_graids_tracking_send_channel_id'
         WYNNAPI_TOMES_REQUESTING_LIVE = 'wynnapi_tomes_requesting_live_channel_id'
+        WYNNAPI_WAR_TRACKING_SEND = "wynnapi_war_tracking_send_channel_id"
         # Not yet connected to this system, will use this key when hooked up
         ANNIHILATION_PARTIES_SIGNUP_LIVE = 'annihilation_parties_signup_live_channel_id'
 
@@ -405,7 +406,8 @@ class MetaTable:
         # Standard: MODULE_SUBMODULE_PROCESS_MESSAGENAME = 'module_submodule_process_messagename_message_id'
         # Examples: WYNNAPI_TOMES_REQUESTING_LAYOUTVIEW  = 'wynnapi_tomes_requesting_layoutview_message_id'
         #           ANNIHILATION_PARTIES_SIGNUP_EMBEDS   = 'annihilation_parties_signup_embeds_message_id'
-        WYNNAPI_TOMES_REQUESTING_LAYOUTVIEW  = 'wynn_api_tomes_requesting_layoutview_message_id'
+        WYNNAPI_TOMES_REQUESTING_LAYOUTVIEW  = 'wynn_api_tomes_requesting_layoutview_message_id' # TODO: messed up here
+        WYNNAPI_WAR_TRACKING_LAYOUTVIEW = 'wynnapi_war_tracking_layoutview_message_id'
         # Not yet connected to this system, will use this key when hooked up
         ANNIHILATION_PARTIES_SIGNUP_EMBEDS   = 'annihilation_parties_signup_embeds_message_id'
     
@@ -439,6 +441,7 @@ class MetaTable:
         #           WYNNAPI_TOMES_REQUESTING_TIMEINTERVAL = 'wynnapi_tomes_requesting_timeinterval_other'
         WYNNAPI_TOMES_REQUESTING_WEEKLYSTREAK = 'wynnapi_tomes_requesting_weeklystreak_other'
         WYNNAPI_TOMES_REQUESTING_TIMEINTERVAL = 'wynnapi_tomes_requesting_timeinterval_other'
+        WYNNAPI_WARS_PAYOUT_AMOUNT = "wynnapi_wars_payout_amount_other"
         # Not yet connected to this system, will use this key when hooked up
         ANNIHILATION_PARTIES_TRACKING_ID      = 'annihilation_parties_tracking_id_other'
 
