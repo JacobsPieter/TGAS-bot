@@ -73,6 +73,15 @@ class Database:
                 pass
             self.conn.execute("PRAGMA user_version = 2")
 
+        if version < 3:
+            try:
+                self.conn.execute("""
+                    UPDATE member_wars SET backlog = 0 WHERE backlog IS NULL
+                """)
+            except sqlite3.OperationalError:
+                pass
+            self.conn.execute("PRAGMA user_version = 3")
+
         self.conn.commit()
 
 
