@@ -113,12 +113,24 @@ async def handle_wars(guild: discord.Guild, data: dict):
                         }
                     )
                 continue
+            member_wars_db_res = member_wars_db.fetchone('uuid', guild_member)
+            if member_wars_db_res is None:
+                member_wars_db.update(
+                    primary_key_name='uuid',
+                    primary_key=guild_member,
+                    columns={
+                        'total': member_data['globalData']['wars'],
+                        'total_before_last_payout': member_data['globalData']['wars'],
+                        'payout': 0
+                        }
+                    )
+                continue
             if previous_members[guild_member]['wars'] < member_data['globalData']['wars']:
                 logger.info('%s completed %s war(s)', member_data['username'], member_data['globalData']['wars'] - previous_members[guild_member]['wars'])
                 player_completed_wars = member_data['globalData']['wars'] - previous_members[guild_member]['wars']
-                member_wars_db_res = member_wars_db.fetchone('uuid', guild_member)
-                if member_wars_db_res is None:
-                    raise excepts.DatabaseException(message=f'For member {guild_member} there isn\'t an entry get in the member_wars_db, but they were called.')
+                # member_wars_db_res = member_wars_db.fetchone('uuid', guild_member)
+                # if member_wars_db_res is None:
+                #     raise excepts.DatabaseException(message=f'For member {guild_member} there isn\'t an entry get in the member_wars_db, but they were called.')
                 current_payout = member_wars_db_res['payout']
                 per_war_payout = meta.get_other(db.MetaTable.OtherKeys.WYNNAPI_WARS_PAYOUT_AMOUNT)
                 if per_war_payout is None:
