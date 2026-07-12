@@ -43,7 +43,8 @@ class Bot(commands.Bot):
         "cogs.api_depending.api_queries",
         "cogs.api_depending.tome_requesting",
         "cogs.api_depending.graid_tracking",
-        "cogs.api_depending.war_tracking"
+        "cogs.api_depending.war_tracking",
+        "cogs.bot_setup"
         ]
 
         for ext in extensions:

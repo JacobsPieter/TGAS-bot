@@ -142,6 +142,7 @@ class APIQueries(commands.Cog):
         
         await self.bot.state.graid_queue.put(data)
         await self.bot.state.war_queue.put(data)
+        
         await self.bot.state.graid_queue.join()
         await self.bot.state.war_queue.join()
 

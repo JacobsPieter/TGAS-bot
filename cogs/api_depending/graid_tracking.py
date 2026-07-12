@@ -62,12 +62,6 @@ class GraidsCog(commands.Cog):
     async def reward_aspects(self, interaction: discord.Interaction):
         await interaction.response.send_modal(AspectRewardModal())
 
-    @app_commands.command(name="set_graid_channel")
-    async def set_channel_for_graids(self, interaction: discord.Interaction, channel:discord.TextChannel):
-        dc_utils.set_channel(channel=meta.ChannelUses.WYNNAPI_GRAIDS_TRACKING_SEND, discord_channel=channel, meta_db=meta)
-        dc_utils.set_guild(guild=channel.guild, meta_db=meta)
-        await interaction.response.send_message(content='channel set!', ephemeral=True)
-
 
 
 async def handle_graids(bot: discord.Client, data):
