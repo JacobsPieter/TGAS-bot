@@ -8,7 +8,7 @@ services:
     restart: unless-stopped
 
     volumes:
-      - /mnt/nas/Pieter/2_discord_bot/TGAS/persistent_data:/app/persistent_data
+      - /mnt/nas/Pieter/2_discord_bot/TGAS_bot/persistent_data:/app/persistent_data
     
     environment:
       BOT_TOKEN: ${BOT_TOKEN}
