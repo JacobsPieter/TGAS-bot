@@ -109,7 +109,8 @@ async def handle_wars(guild: discord.Guild, data: dict):
                     columns={
                         'total': member_data['globalData']['wars'],
                         'total_before_last_payout': member_data['globalData']['wars'],
-                        'payout': 0
+                        'payout': 0,
+                        'backlog': 0
                         }
                     )
                 continue
@@ -121,7 +122,8 @@ async def handle_wars(guild: discord.Guild, data: dict):
                     columns={
                         'total': member_data['globalData']['wars'],
                         'total_before_last_payout': member_data['globalData']['wars'],
-                        'payout': 0
+                        'payout': 0,
+                        'backlog': 0
                         }
                     )
                 continue
