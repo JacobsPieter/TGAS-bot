@@ -98,6 +98,15 @@ def init_database(database_path = paths.DATABASE):
         }
     )
 
+    info_messages_db = db.UpdatingTable('info_messages', p)
+    info_messages_db.create(
+        primary_key=('message_name', str()),
+        columns={
+            'channel_id': int(),
+            'message_id': int(),
+        }
+    )
+
     # annihilation_parties_db = db.TrackingTable('annihilation_parties', p)
     # annihilation_parties_db.create(
     #     columns={

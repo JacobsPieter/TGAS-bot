@@ -126,7 +126,26 @@ class SetupView(discord.ui.LayoutView):
             CounterButton(self, 'tome_weeklies_needed', -10, label='-10', style=discord.ButtonStyle.red),
             TomeWeekliesNeeded_ConfirmButton(self)
             ))
+        
 
+        self.add_item(discord.ui.TextDisplay(content='## Info messages'))
+        try:
+            current_info_channel = dc_utils.get_textchannel(meta.ChannelUses.INFO_MESSAGES_UPDATING_SEND, guild, meta)
+            class Info_Channel_Select1(discord.ui.ChannelSelect):
+                def __init__(self):
+                    super().__init__(channel_types=[discord.ChannelType.forum], default_values=[current_info_channel])
+                async def callback(self, interaction: discord.Interaction) -> Any:
+                    dc_utils.set_channel(meta.ChannelUses.INFO_MESSAGES_UPDATING_SEND, cast(discord.ForumChannel, self.values[0]), meta)
+                    await interaction.response.send_message(content='ㅤ', ephemeral=True)
+            self.add_item(discord.ui.ActionRow(Info_Channel_Select1()))
+        except:
+            class Info_Channel_Select2(discord.ui.ChannelSelect):
+                def __init__(self):
+                    super().__init__(channel_types=[discord.ChannelType.forum], placeholder='Update channel')
+                async def callback(self, interaction: discord.Interaction) -> Any:
+                    dc_utils.set_channel(meta.ChannelUses.INFO_MESSAGES_UPDATING_SEND, cast(discord.ForumChannel, self.values[0]), meta)
+                    await interaction.response.send_message(content='ㅤ', ephemeral=True, delete_after=0.1)
+            self.add_item(discord.ui.ActionRow(Info_Channel_Select2()))
 
 
 class CounterButton(discord.ui.Button):

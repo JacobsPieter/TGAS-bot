@@ -8,6 +8,7 @@ __pycache__
 temp.py
 
 testing
+helpers
 
 *.db
 
@@ -19,3 +20,4 @@ main.spec
 build
 dist
 persistent_data/logs/*
+persistent_data/configs/credential_configs/*

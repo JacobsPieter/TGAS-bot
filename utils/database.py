@@ -410,6 +410,7 @@ class MetaTable:
         WYNNAPI_WAR_TRACKING_SEND = "wynnapi_war_tracking_send_channel_id"
         # Not yet connected to this system, will use this key when hooked up
         ANNIHILATION_PARTIES_SIGNUP_LIVE = 'annihilation_parties_signup_live_channel_id'
+        INFO_MESSAGES_UPDATING_SEND = 'info_messages_updating_send_channel_id'
 
     class MessageIds(Enum):
         # Standard: MODULE_SUBMODULE_PROCESS_MESSAGENAME = 'module_submodule_process_messagename_message_id'

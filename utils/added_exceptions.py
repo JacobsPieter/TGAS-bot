@@ -88,6 +88,19 @@ class MessageNotConfiguredError(DatabaseException):
             message=f"Message '{message.name}' has not been configured."
         )
 
+class InfoMessageNotConfiguredError(DatabaseException):
+    """
+    Raised when a required message ID is missing from the
+    database.
+    """
+
+    def __init__(self, message: Any):
+        self.message = message
+
+        super().__init__(
+            message=f"Message '{message}' has not been configured."
+        )
+
 class RoleNotConfiguredError(DatabaseException):
     """
     Raised when a required role ID is missing from the
@@ -137,12 +150,40 @@ class ChannelNotFoundError(DiscordAPIException):
     within the Discord guild.
     """
 
+    def __init__(self, channel_id: int):
+        self.channel_id = channel_id
+
+        super().__init__(
+            message=f"Channel with' "
+            f"ID: {channel_id} could not be found."
+        )
+
+class MetaChannelNotFoundError(DiscordAPIException):
+    """
+    Raised when a configured channel ID cannot be resolved
+    within the Discord guild.
+    """
+
     def __init__(self, channel: Any, channel_id: int):
         self.channel = channel
         self.channel_id = channel_id
 
         super().__init__(
             message=f"Channel '{channel.name}' "
+            f"(ID {channel_id}) could not be found."
+        )
+
+class ThreadChannelNotFoundError(DiscordAPIException):
+    """
+    Raised when a configured channel ID cannot be resolved
+    within the Discord guild.
+    """
+
+    def __init__(self, channel_id: int):
+        self.channel_id = channel_id
+
+        super().__init__(
+            message=f"Thread with"
             f"(ID {channel_id}) could not be found."
         )
 
@@ -158,6 +199,21 @@ class MessageNotFoundError(DiscordAPIException):
 
         super().__init__(
             message=f"Message '{message.name}' "
+            f"(ID {message_id}) could not be found."
+        )
+
+class ForumMessageNotFoundError(DiscordAPIException):
+    """
+    Raised when a configured message ID cannot be resolved
+    from Discord.
+    """
+
+    def __init__(self, message: Any, message_id: int):
+        self.message = message
+        self.message_id = message_id
+
+        super().__init__(
+            message=f"Message '{message}' "
             f"(ID {message_id}) could not be found."
         )
 

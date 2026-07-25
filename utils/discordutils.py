@@ -59,16 +59,62 @@ def set_channel(channel: db.MetaTable.ChannelUses, discord_channel: DISCORD_CHAN
     channel_id = discord_channel.id
     return meta_db.set_channel_id(channel, channel_id)
 
+async def get_thread_by_id(channel_id: int, bot: discord.Client) -> discord.Thread:
+    try:
+        return_channel = await bot.fetch_channel(channel_id)
+    except discord.NotFound as e:
+        raise excepts.ChannelNotFoundError(channel_id)
+    if not isinstance(return_channel, discord.Thread):
+        raise TypeError(
+            f"Expected ThreadChannel but got {type(return_channel).__name__}"
+        )
+    return return_channel
+
+async def get_textchannel_by_id(channel_id: int, bot: discord.Client) -> discord.TextChannel:
+    try:
+        return_channel = await bot.fetch_channel(channel_id)
+    except discord.NotFound as e:
+        raise excepts.ChannelNotFoundError(channel_id)
+    if not isinstance(return_channel, discord.TextChannel):
+        raise TypeError(
+            f"Expected TextChannel but got {type(return_channel).__name__}"
+        )
+    return return_channel
+
+async def get_forumchannel_by_id(channel_id: int, bot: discord.Client) -> discord.ForumChannel:
+    try:
+        return_channel = await bot.fetch_channel(channel_id)
+    except discord.NotFound as e:
+        raise excepts.ChannelNotFoundError(channel_id)
+    if not isinstance(return_channel, discord.ForumChannel):
+        raise TypeError(
+            f"Expected TextChannel but got {type(return_channel).__name__}"
+        )
+    return return_channel
+
 def get_textchannel(channel: db.MetaTable.ChannelUses, guild: discord.Guild, meta_db: db.MetaTable) -> discord.TextChannel:
     channel_id = meta_db.get_channel_id(channel)
     if channel_id is None:
         raise excepts.ChannelNotConfiguredError(channel)
     return_channel = guild.get_channel(channel_id)
     if return_channel is None:
-        raise excepts.ChannelNotFoundError(channel, channel_id)
+        raise excepts.MetaChannelNotFoundError(channel, channel_id)
     if not isinstance(return_channel, discord.TextChannel):
         raise TypeError(
             f"Expected TextChannel but got {type(return_channel).__name__}"
+        )
+    return return_channel
+
+def get_forumchannel(channel: db.MetaTable.ChannelUses, guild: discord.Guild, meta_db: db.MetaTable) -> discord.ForumChannel:
+    channel_id = meta_db.get_channel_id(channel)
+    if channel_id is None:
+        raise excepts.ChannelNotConfiguredError(channel)
+    return_channel = guild.get_channel(channel_id)
+    if return_channel is None:
+        raise excepts.MetaChannelNotFoundError(channel, channel_id)
+    if not isinstance(return_channel, discord.ForumChannel):
+        raise TypeError(
+            f"Expected ForumChannel but got {type(return_channel).__name__}"
         )
     return return_channel
 
