@@ -358,7 +358,7 @@ def parse(tab) -> list[DocElement]:
 def render_text_element(text_element: TextDocElement) -> str:
     text = ''
     for textrun in text_element.text:
-        added_text = f"{'__' if textrun.style.underline else ''}{textrun.text}{'__' if textrun.style.underline else ''}"
+        added_text = f"{'__' if textrun.style.underline and not textrun.style.link else ''}{textrun.text}{'__' if textrun.style.underline and not textrun.style.link else ''}"
         added_text = f"{'*' if textrun.style.italic else ''}{added_text}{'*' if textrun.style.italic else ''}"
         added_text = f"{'**' if textrun.style.bold else ''}{added_text}{'**' if textrun.style.bold else ''}"
         text += added_text
