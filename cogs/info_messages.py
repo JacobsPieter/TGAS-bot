@@ -107,7 +107,10 @@ class InfoMessageCog(commands.Cog):
     @tasks.loop(count=1)
     @handle_loop_errors(logger=logger)
     async def startup(self):
-        doc = service.documents().get(documentId="1In7L96GQcQpdrHJo5CEJGiG7UQGY4Rso_wPe9NWt8uI", includeTabsContent=True).execute()
+        doc_id = meta.get_other(meta.OtherKeys.INFOMESSAGES_UPDATING_GOOGLEDOC_ID)
+        if doc_id is None:
+            raise excepts.MetaKeyNotConfiguredError(key=meta.OtherKeys.INFOMESSAGES_UPDATING_GOOGLEDOC_ID)
+        doc = service.documents().get(documentId=doc_id, includeTabsContent=True).execute()
         document = parse(doc['tabs'][0])
         pages = paginate(document)
         self.bot.add_view(DynamicInfoView(pages))
@@ -115,7 +118,10 @@ class InfoMessageCog(commands.Cog):
     @app_commands.command(name='refresh_forum_info_views')
     async def refresh_info_views(self, interaction: discord.Interaction):
         await interaction.response.send_message(content='ㅤ', ephemeral=True, delete_after=True)
-        doc = service.documents().get(documentId="1In7L96GQcQpdrHJo5CEJGiG7UQGY4Rso_wPe9NWt8uI", includeTabsContent=True).execute()
+        doc_id = meta.get_other(meta.OtherKeys.INFOMESSAGES_UPDATING_GOOGLEDOC_ID)
+        if doc_id is None:
+            raise excepts.MetaKeyNotConfiguredError(key=meta.OtherKeys.INFOMESSAGES_UPDATING_GOOGLEDOC_ID)
+        doc = service.documents().get(documentId=doc_id, includeTabsContent=True).execute()
         guild = dc_utils.get_guild(self.bot, meta)
         for tab in doc["tabs"]:
             title = tab["tabProperties"]["title"]

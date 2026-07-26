@@ -3,6 +3,7 @@ Handles the setup for the bot
 """
 import logging
 from typing import Any, cast
+import re
 
 
 import discord
@@ -129,23 +130,64 @@ class SetupView(discord.ui.LayoutView):
         
 
         self.add_item(discord.ui.TextDisplay(content='## Info messages'))
-        try:
-            current_info_channel = dc_utils.get_textchannel(meta.ChannelUses.INFO_MESSAGES_UPDATING_SEND, guild, meta)
-            class Info_Channel_Select1(discord.ui.ChannelSelect):
-                def __init__(self):
-                    super().__init__(channel_types=[discord.ChannelType.forum], default_values=[current_info_channel])
-                async def callback(self, interaction: discord.Interaction) -> Any:
-                    dc_utils.set_channel(meta.ChannelUses.INFO_MESSAGES_UPDATING_SEND, cast(discord.ForumChannel, self.values[0]), meta)
-                    await interaction.response.send_message(content='ㅤ', ephemeral=True)
-            self.add_item(discord.ui.ActionRow(Info_Channel_Select1()))
-        except:
-            class Info_Channel_Select2(discord.ui.ChannelSelect):
-                def __init__(self):
-                    super().__init__(channel_types=[discord.ChannelType.forum], placeholder='Update channel')
-                async def callback(self, interaction: discord.Interaction) -> Any:
-                    dc_utils.set_channel(meta.ChannelUses.INFO_MESSAGES_UPDATING_SEND, cast(discord.ForumChannel, self.values[0]), meta)
-                    await interaction.response.send_message(content='ㅤ', ephemeral=True, delete_after=0.1)
-            self.add_item(discord.ui.ActionRow(Info_Channel_Select2()))
+
+        self.add_item(discord.ui.TextDisplay(content='Current link'))
+        self.google_doc_link = meta.get_other(meta.OtherKeys.INFOMESSAGES_UPDATING_GOOGLEDOC_ID) or "Not set"
+        self.current_google_doc_link = discord.ui.TextDisplay(content=self.google_doc_link)
+        self.add_item(self.current_google_doc_link)
+
+
+
+        self.add_item(discord.ui.ActionRow(
+            InfoMessageGDocLinkButton(self)))
+
+
+class InfoMessageGDocLinkButton(discord.ui.Button):
+    def __init__(self, parent_view: "SetupView"):
+        super().__init__(
+            label="Set link",
+            style=discord.ButtonStyle.blurple,
+        )
+        self.parent_view = parent_view
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(
+            GoogleDocLinkModal(self.parent_view)
+        )
+
+
+class GoogleDocLinkModal(discord.ui.Modal, title="Set invite link"):
+    link = discord.ui.TextInput(
+        label="Link",
+        placeholder="https://docs.google.com/document/d/...",
+        required=True,
+        max_length=500,
+    )
+
+    def __init__(self, parent_view: "SetupView"):
+        super().__init__()
+        self.parent_view = parent_view
+
+    async def on_submit(self, interaction: discord.Interaction):
+        link = str(self.link.value).strip()
+
+        match = re.search(r"/document/d/([a-zA-Z0-9_-]+)", link)
+        if not match:
+            await interaction.response.send_message(
+                "Invalid Google Docs URL.",
+                ephemeral=True,
+            )
+            return
+
+        document_id = match.group(1)
+
+        meta.set_other(meta.OtherKeys.INFOMESSAGES_UPDATING_GOOGLEDOC_ID, document_id)
+
+        self.parent_view.google_doc_link = link
+        self.parent_view.current_google_doc_link.content = link
+
+        await interaction.response.edit_message(view=self.parent_view)
+
 
 
 class CounterButton(discord.ui.Button):

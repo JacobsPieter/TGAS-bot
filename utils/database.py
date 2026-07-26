@@ -452,6 +452,7 @@ class MetaTable:
         WYNNAPI_TOMES_REQUESTING_WEEKLYSTREAK = 'wynnapi_tomes_requesting_weeklystreak_other'
         WYNNAPI_TOMES_REQUESTING_TIMEINTERVAL = 'wynnapi_tomes_requesting_timeinterval_other'
         WYNNAPI_WARS_PAYOUT_AMOUNT = "wynnapi_wars_payout_amount_other"
+        INFOMESSAGES_UPDATING_GOOGLEDOC_ID = "infomessages_updating_googledoc_id_other"
         # Not yet connected to this system, will use this key when hooked up
         ANNIHILATION_PARTIES_TRACKING_ID      = 'annihilation_parties_tracking_id_other'
 

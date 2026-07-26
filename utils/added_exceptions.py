@@ -51,6 +51,17 @@ class DatabaseException(BotBaseException):
     def __init__(self, message: str):
         super().__init__(message=message)
 
+
+class MetaKeyNotConfiguredError(DatabaseException):
+    """
+    Raised when a certain key hasn't been configured yet
+    in the database
+    """
+    def __init__(self, key):
+        super().__init__(
+            message=f"{key} has not been configured yet."
+        )
+
 class GuildNotConfiguredError(DatabaseException):
     """
     Raised when no guild ID has been configured in the
