@@ -26,7 +26,7 @@ MAX_ELEMENTS_PER_LAYOUTVIEW = 40
 SCOPES = ["https://www.googleapis.com/auth/documents.readonly"]
 
 credentials = service_account.Credentials.from_service_account_file(
-    "persistent_data\\configs\\credential_configs\\tgas-bot-test-40115adbe3de.json",
+    paths.PERSISTENT_CREDENTIAL_CONFIGS / "tgas-bot-test-40115adbe3de.json",
     scopes=SCOPES
 )
 

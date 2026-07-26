@@ -7,14 +7,14 @@ import utils.paths as path
 
 def init_logging():
     date = datetime.datetime.now(tz=datetime.timezone.utc)
-    filename = date.strftime("bot_log_%Y-%m-%dT%H_%M_%SZ")
+    filename = date.strftime(r"bot_log_%Y-%m-%dT%H_%M_%SZ")
 
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
         handlers=[
             logging.StreamHandler(sys.stdout),
-            logging.FileHandler(f"{path.LOG_DIR}\\{filename}.log", encoding="utf-8")
+            logging.FileHandler(path.LOG_DIR / f"{filename}.log", encoding="utf-8")
         ]
     )
 
