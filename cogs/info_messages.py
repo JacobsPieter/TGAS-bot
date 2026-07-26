@@ -126,7 +126,7 @@ class InfoMessageCog(commands.Cog):
         for tab in doc["tabs"]:
             title = tab["tabProperties"]["title"]
             content = tab["documentTab"]["body"]["content"]
-            channel = dc_utils.get_forumchannel(meta.ChannelUses.INFO_MESSAGES_UPDATING_SEND, guild, meta)
+            #channel = dc_utils.get_forumchannel(meta.ChannelUses.INFO_MESSAGES_UPDATING_SEND, guild, meta)
 
             document = parse(tab)
             pages = paginate(document)
