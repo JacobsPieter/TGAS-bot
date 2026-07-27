@@ -126,7 +126,9 @@ class InfoMessageCog(commands.Cog):
         for tab in iter_tabs(doc["tabs"]):
             title = tab["tabProperties"]["title"]
             content = tab["documentTab"]["body"]["content"]
-            #channel = dc_utils.get_forumchannel(meta.ChannelUses.INFO_MESSAGES_UPDATING_SEND, guild, meta)
+
+            if 'IGNORE ME' in get_text(content).strip()[:20]:
+                continue
 
             document = parse(tab)
             pages = paginate(document)
