@@ -123,7 +123,7 @@ class InfoMessageCog(commands.Cog):
             raise excepts.MetaKeyNotConfiguredError(key=meta.OtherKeys.INFOMESSAGES_UPDATING_GOOGLEDOC_ID)
         doc = service.documents().get(documentId=doc_id, includeTabsContent=True).execute()
         guild = dc_utils.get_guild(self.bot, meta)
-        for tab in doc["tabs"]:
+        for tab in iter_tabs(doc["tabs"]):
             title = tab["tabProperties"]["title"]
             content = tab["documentTab"]["body"]["content"]
             #channel = dc_utils.get_forumchannel(meta.ChannelUses.INFO_MESSAGES_UPDATING_SEND, guild, meta)
@@ -276,8 +276,10 @@ class DynamicInfoView(discord.ui.LayoutView):
 
 
 
-
-
+def iter_tabs(tabs):
+    for tab in tabs:
+        yield tab
+        yield from iter_tabs(tab.get("childTabs", []))
 
 
 
