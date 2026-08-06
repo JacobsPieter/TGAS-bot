@@ -4,9 +4,19 @@ import discord
 from discord.ext import commands
 
 import utils.botstate as botstate
-
+import utils.database as db
+import utils.paths as paths
 
 logger = logging.getLogger(name=__name__)
+
+
+def init_database(database_path = paths.DATABASE):
+    global meta # pylint: disable=global-variable-undefined
+
+    p = database_path
+
+    meta = db.MetaTable(p)
+
 
 class Bot(commands.Bot):
     def __init__(self):
@@ -25,6 +35,10 @@ class Bot(commands.Bot):
         )
 
     async def setup_hook(self):
+        init_database()
+        guild_id = meta.get_guild_id()
+        if not guild_id is None:
+            await self.fetch_guild(guild_id)
         await self.load_cogs()
 
     async def on_ready(self):

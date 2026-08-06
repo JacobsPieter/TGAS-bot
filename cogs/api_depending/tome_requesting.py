@@ -29,7 +29,6 @@ def init_database(database_path = paths.DATABASE):
 class TomesCog(commands.Cog):
     def __init__(self, bot: discord.Client):
         self.bot = bot
-        self.guild: discord.Guild
 
     async def cog_load(self) -> None:
         self.startup.start()
@@ -38,9 +37,8 @@ class TomesCog(commands.Cog):
     @tasks.loop(count=1)
     @handle_loop_errors(logger=logger)
     async def startup(self):
-        self.guild = dc_utils.get_guild(client=self.bot, meta_db=meta)
         self.tome_update_looping.start()
-        self.bot.add_view(view=RequestedTomesView(guild=self.guild))
+        self.bot.add_view(view=RequestedTomesView(guild=dc_utils.get_guild(self.bot, meta)))
 
 
     @app_commands.command(name='setup_tomes', description='all times are in days')
@@ -66,10 +64,8 @@ class TomesCog(commands.Cog):
     @tasks.loop(minutes=2)
     @handle_loop_errors(logger=logger)
     async def tome_update_looping(self):
-        try:
-            await update_tome_live_message(self.guild)
-        except: # pylint: disable=bare-except
-            return
+        await update_tome_live_message(dc_utils.get_guild(self.bot, meta))
+
 
     @tome_update_looping.before_loop
     async def tome_update_looping_before_loop(self):
