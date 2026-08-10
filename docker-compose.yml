@@ -5,14 +5,14 @@ services:
       context: .
       network: host
 
-    container_name: TGAS_bot
+    container_name: TGAS
 
     restart: unless-stopped
     dns:
       - 8.8.8.8
       - 1.1.1.1
     volumes:
-      - /mnt/nas/Pieter/2_discord_bot/TGAS_bot/persistent_data:/app/persistent_data
+      - /mnt/nas/Pieter/2_discord_bot/TGAS/persistent_data:/app/persistent_data
     
     environment:
       BOT_TOKEN: ${BOT_TOKEN}
