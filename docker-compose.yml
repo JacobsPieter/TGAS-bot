@@ -1,7 +1,9 @@
 services:
 
   discordbot:
-    build: .
+    build:
+      context: .
+      network: host
 
     container_name: TGAS_bot
 
