@@ -6,7 +6,9 @@ services:
     container_name: TGAS_bot
 
     restart: unless-stopped
-
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     volumes:
       - /mnt/nas/Pieter/2_discord_bot/TGAS_bot/persistent_data:/app/persistent_data
     
