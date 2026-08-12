@@ -140,11 +140,11 @@ class APIQueries(commands.Cog):
     async def fetch_guild_endpoint(self):
         data = await api_handler.get_endpoint_data(api_handler.construct_guild_endpoint_url())
         
-        await self.bot.state.graid_queue.put(data)
-        await self.bot.state.war_queue.put(data)
+        # await self.bot.state.graid_queue.put(data)
+        # await self.bot.state.war_queue.put(data)
         
-        await self.bot.state.graid_queue.join()
-        await self.bot.state.war_queue.join()
+        # await self.bot.state.graid_queue.join()
+        # await self.bot.state.war_queue.join()
 
 
         for rank, rank_members in data['members'].items():
