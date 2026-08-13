@@ -374,8 +374,8 @@ def render_text_element(text_element: TextDocElement) -> str:
     text = resolve_mentions(text)
     return text
 
-ROLE_MENTION_PATTERN = re.compile(r'@role:([^\n]+)')
-USER_MENTION_PATTERN = re.compile(r'@user:([^\n]+)')
+ROLE_MENTION_PATTERN = re.compile(r'@role\[([^\]]+)\]')
+USER_MENTION_PATTERN = re.compile(r'@user\[([^\]]+)\]')
 
 
 def resolve_mentions(text: str) -> str:
