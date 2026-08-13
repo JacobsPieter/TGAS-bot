@@ -1,6 +1,7 @@
 import logging
 from typing import Any, List, Sequence, cast
 from dataclasses import dataclass
+import re
 
 
 import discord
@@ -370,6 +371,76 @@ def render_text_element(text_element: TextDocElement) -> str:
         text = '- ' + text
     elif isinstance(text_element, Header):
         text = '#' * (text_element.level) + ' ' + text
+    text = resolve_mentions(text)
+    return text
+
+ROLE_MENTION_PATTERN = re.compile(r'@role\[([^\]]+)\]')
+USER_MENTION_PATTERN = re.compile(r'@user\[([^\]]+)\]')
+
+
+def resolve_mentions(text: str) -> str:
+    guild = dc_utils.get_guild(info_message_cog.bot, meta)
+
+    def replace_role(match: re.Match) -> str:
+        role_name = match.group(1).strip()
+
+        roles = [role for role in guild.roles if role.name == role_name]
+
+        if not roles:
+            logger.warning(
+                "Could not find role '%s' in guild '%s'",
+                role_name,
+                guild.name
+            )
+            return match.group(0)
+
+        if len(roles) > 1:
+            logger.warning(
+                "Multiple roles named '%s' found in guild '%s'",
+                role_name,
+                guild.name
+            )
+            return match.group(0)
+
+        return roles[0].mention
+
+    def replace_user(match: re.Match) -> str:
+        username = match.group(1).strip()
+
+        # First try username
+        members = [
+            member for member in guild.members
+            if member.name == username
+        ]
+
+        # Then try display name
+        if not members:
+            members = [
+                member for member in guild.members
+                if member.display_name == username
+            ]
+
+        if not members:
+            logger.warning(
+                "Could not find user '%s' in guild '%s'",
+                username,
+                guild.name
+            )
+            return match.group(0)
+
+        if len(members) > 1:
+            logger.warning(
+                "Multiple users matching '%s' found in guild '%s'",
+                username,
+                guild.name
+            )
+            return match.group(0)
+
+        return members[0].mention
+
+    text = ROLE_MENTION_PATTERN.sub(replace_role, text)
+    text = USER_MENTION_PATTERN.sub(replace_user, text)
+
     return text
 
 
