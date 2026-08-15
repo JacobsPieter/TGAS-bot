@@ -230,6 +230,14 @@ class DynamicInfoView(discord.ui.LayoutView):
                             )
                         )
                     )
+                else:
+                    self.add_item(
+                        discord.ui.MediaGallery(
+                                discord.MediaGalleryItem(
+                                media=element.url
+                                )
+                        )
+                    )
         if text:
             self.add_item(discord.ui.TextDisplay(content=text))
 
