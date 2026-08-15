@@ -143,10 +143,19 @@ class InfoMessageCog(commands.Cog):
                 message_id = message_db_res['message_id']
                 try:
                     channel = await dc_utils.get_textchannel_by_id(channel_id, self.bot)
-                    message = await channel.fetch_message(message_id)
+                    try:
+                        message = await channel.fetch_message(message_id)
+                        await message.edit(view=dynamic_info_view)
+                    except discord.NotFound:
+                        logger.info("it couldn't find the message")
+                        await ask_channel_to_send(interaction, title, dynamic_info_view, self.bot)
                 except TypeError:
-                    message = await get_forum_message(self.bot, channel_id, message_id, title)
-                await message.edit(view=dynamic_info_view)
+                    try:
+                        message = await get_forum_message(self.bot, channel_id, message_id, title)
+                        await message.edit(view=dynamic_info_view)
+                    except discord.NotFound:
+                        logger.info("It couldn't find the message")
+                        await ask_channel_to_send(interaction, title, dynamic_info_view, self.bot)
             except excepts.ThreadChannelNotFoundError:
                 logger.info("It couldn't find the thread channel")
                 await ask_channel_to_send(interaction, title, dynamic_info_view, self.bot)
