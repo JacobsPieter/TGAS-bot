@@ -107,23 +107,21 @@ def init_database(database_path = paths.DATABASE):
         }
     )
 
-    # annihilation_parties_db = db.TrackingTable('annihilation_parties', p)
-    # annihilation_parties_db.create(
-    #     columns={
-    #         'discord_id': str(),
-    #         'anni_id': int(),
-    #         'server_region': str(),
-    #         'weapon': str(),
-    #         'archetype': str(),
-    #         'build_link': str(),
-    #         'sure': bool(),
-    #         'can_host': bool(),
-    #         'current_host': bool(),
-    #         'in_guild': bool(),
-    #         'current_party_id': int()
-    #     },
-    #     extra_sql='UNIQUE(discord_id, anni_id)'
-    # )
+    annihilation_parties_db = db.TrackingTable('annihilation_parties', p)
+    annihilation_parties_db.create(
+        columns={
+            'discord_id': str(),
+            'anni_id': int(),
+            'server_region': str(),
+            'weapon': str(),
+            'archetype': str(),
+            'build_link': str(),
+            'sure': bool(),
+            'can_host': bool(),
+            'current_host': bool(),
+            'in_guild': bool(),
+            # 'current_party_id': int()
+        })
 
     logger.info(msg="Database initalisation done")
 

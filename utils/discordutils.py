@@ -147,6 +147,10 @@ def get_role(role: db.MetaTable.RoleIds, guild: discord.Guild, meta_db: db.MetaT
         raise excepts.RoleNotFoundError(role, role_id)
     return return_role
 
+def mention_role(role_to_mention: db.MetaTable.RoleIds, guild: discord.Guild, meta_db: db.MetaTable):
+    role = get_role(role_to_mention, guild, meta_db)
+    return role.mention
+
 
 def parse_discord_timestamps(string: str) -> datetime.datetime:
     timestamp_regex = re.compile(pattern=r"<t:(\d+)(?::[tTdDfFsSR])?>")

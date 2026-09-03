@@ -136,10 +136,28 @@ class SetupView(discord.ui.LayoutView):
         self.current_google_doc_link = discord.ui.TextDisplay(content=self.google_doc_link)
         self.add_item(self.current_google_doc_link)
 
-
-
         self.add_item(discord.ui.ActionRow(
             InfoMessageGDocLinkButton(self)))
+
+        self.add_item(discord.ui.TextDisplay(content='## Anniparties'))
+        class AnniChannelSelect(discord.ui.ChannelSelect):
+            def __init__(self):
+                super().__init__()
+                self.channel_types=[discord.ChannelType.text]
+                self.max_values=1
+            async def callback(self, interaction: discord.Interaction) -> Any:
+                dc_utils.set_channel(meta.ChannelUses.ANNIHILATION_PARTIES_SIGNUP_LIVE, cast(discord.TextChannel, self.values[0]), meta)
+                await interaction.response.send_message(content='ㅤ', ephemeral=True)
+        self.add_item(discord.ui.ActionRow(AnniChannelSelect()))
+
+        class AnniRoleSelect(discord.ui.RoleSelect):
+            def __init__(self):
+                super().__init__()
+                self.max_values=1
+            async def callback(self, interaction: discord.Interaction) -> Any:
+                dc_utils.set_role(meta.RoleIds.SPECIFIC_ANNIHILATION_PING, cast(discord.Role, self.values[0]), meta)
+                await interaction.response.send_message(content='ㅤ', ephemeral=True)
+        self.add_item(discord.ui.ActionRow(AnniRoleSelect()))
 
 
 class InfoMessageGDocLinkButton(discord.ui.Button):
